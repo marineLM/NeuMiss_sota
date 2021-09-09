@@ -19,6 +19,26 @@ class Sigmoid():
         return np.divide(1, 1 + np.exp(-x))
 
 
+class Square():
+    def __init__(self, curvature):
+        self.curvature = curvature
+
+    def __call__(self, x):
+        return self.curvature*np.square(x - 1)
+
+
+class Stairs():
+    def __init__(self, curvature):
+        self.curvature = curvature
+
+    def __call__(self, x):
+        s = x - 1
+        for a, b in zip([2, -4, 2], [-0.8, -1, -1.2]):
+            tmp = np.sqrt(np.pi/8)*self.curvature*(x + b)
+            s += a*Probit()(tmp)
+        return s
+
+
 def MCAR(X, p, random_state):
     """
     Missing completely at random mechanism.

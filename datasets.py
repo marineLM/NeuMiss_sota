@@ -6,7 +6,7 @@ from sklearn.utils import check_random_state
 from torch.utils.data import Dataset
 
 from amputation import (MCAR, MNAR_GSM, MNAR_PSM, MAR_logistic, MNAR_logistic,
-                        MNAR_logistic_uniform, Probit, Sigmoid)
+                        MNAR_logistic_uniform, Probit, Sigmoid, Square, Stairs)
 
 
 class BaseDataset(ABC, Dataset):
@@ -95,32 +95,15 @@ class BaseDataset(ABC, Dataset):
 
     def _generate_y(self, X):
         dot_product = X.dot(self.beta[1:]) + self.beta[0]
+        link_fn = get_link_function(self.link, curvature=self.curvature)
 
         if self.is_classif():
-            if self.link == 'logit':
-                link_fn = Sigmoid()
-
-            elif self.link == 'probit':
-                link_fn = Probit()
-
             # Y ~ Binomial(link(<X,Beta>))
             probas = link_fn(dot_product)
             y = self.rng.binomial(p=probas, n=1)
 
         else:
-
-            if self.link == 'linear':
-                y = dot_product
-
-            elif self.link == 'square':
-                y = self.curvature*(dot_product-1)**2
-
-            elif self.link == 'stairs':
-                y = dot_product - 1
-                for a, b in zip([2, -4, 2], [-0.8, -1, -1.2]):
-                    tmp = np.sqrt(np.pi/8)*self.curvature*(dot_product + b)
-                    y += a*Probit()(tmp)
-
+            y = link_fn(dot_product)
             sigma2_noise = np.var(y)/self.snr
             noise = self.rng.normal(
                 loc=0, scale=np.sqrt(sigma2_noise), size=self.n_samples)
@@ -147,12 +130,29 @@ class BaseDataset(ABC, Dataset):
         """Return the number of samples of the dataset."""
         return self.X.shape[0]
 
+    def get_data_params(self):
+        """Retrieve the parameters used to generate the data."""
+        return {
+            'n_samples': self.n_samples,
+            'X_model': self.X_model,
+            'mean': self.mean,
+            'cov': self.cov,
+            'link': self.link,
+            'beta': self.beta,
+            'curvature': self.curvature,
+            'snr': self.snr,
+            'random_state': self.random_state,
+        }
+
 
 class CompleteDataset(BaseDataset):
     """Generate a Dataset without missing values."""
 
     def _generate_mask(self):
         return np.zeros_like(self.X)
+
+    def get_data_params(self):
+        return dict(super().get_data_params(), **{'mv_mechanism': 'complete'})
 
 
 class MCARDataset(BaseDataset):
@@ -171,6 +171,12 @@ class MCARDataset(BaseDataset):
 
     def _generate_mask(self):
         return MCAR(self.X, self.missing_rate, self.rng)
+
+    def get_data_params(self):
+        return dict(**super().get_data_params(), **{
+            'mv_mechanism': 'MCAR',
+            'missing_rate': self.missing_rate,
+        })
 
 
 class MARDataset(BaseDataset):
@@ -198,7 +204,7 @@ class MARDataset(BaseDataset):
     def _check_attributes(self):
         available_models = ['logistic']
         if self.model not in available_models:
-            raise ValueError(f'Unknown link "{self.model}". '
+            raise ValueError(f'Unknown model "{self.model}". '
                              f'Supported: {available_models}.')
         super()._check_attributes()
 
@@ -206,6 +212,14 @@ class MARDataset(BaseDataset):
         if self.model == 'logistic':
             return MAR_logistic(self.X, self.missing_rate,
                                 self.p_obs, self.rng)
+
+    def get_data_params(self):
+        return dict(super().get_data_params(), **{
+            'mv_mechanism': 'MAR',
+            'missing_rate': self.missing_rate,
+            'p_obs': self.p_obs,
+            'model': self.model,
+        })
 
 
 class MNARDataset(BaseDataset):
@@ -247,7 +261,7 @@ class MNARDataset(BaseDataset):
     def _check_attributes(self):
         available_models = ['logistic', 'logistic_uniform', 'GSM', 'PSM']
         if self.model not in available_models:
-            raise ValueError(f'Unknown link "{self.model}". '
+            raise ValueError(f'Unknown model "{self.model}". '
                              f'Supported: {available_models}.')
 
         if self.model == 'logistic' and self.missing_rate is None:
@@ -291,3 +305,40 @@ class MNARDataset(BaseDataset):
 
         elif self.model == 'PSM':
             return MNAR_PSM(self.X, self.lbd, self.c, self.rng)
+
+    def get_data_params(self):
+        return dict(super().get_data_params(), **{
+            'mv_mechanism': 'MNAR',
+            'missing_rate': self.missing_rate,
+            'p_params': self.p_params,
+            'model': self.model,
+            'k': self.k,
+            'sigma2_tilde': self.sigma2_tilde,
+            'lbd': self.lbd,
+            'c': self.c,
+        })
+
+
+def get_link_function(link, curvature=None):
+    # Regression links
+    if link == 'linear':
+        return lambda x: x
+
+    if link == 'square':
+        if curvature is None:
+            raise ValueError('curvature is None')
+        return Square(curvature)
+
+    if link == 'stairs':
+        if curvature is None:
+            raise ValueError('curvature is None')
+        return Stairs(curvature)
+
+    # Classification links
+    if link == 'logit':
+        return Sigmoid()
+
+    if link == 'probit':
+        return Probit()
+
+    raise ValueError(f'Unknown link "{link}".')
