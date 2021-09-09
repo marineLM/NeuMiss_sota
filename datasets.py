@@ -1,11 +1,11 @@
 """Simulate Gaussian datasets with MCAR, MAR or MNAR missing values."""
 from abc import ABC, abstractmethod
+from amputation import MCAR, MAR_logistic, MNAR_logistic, MNAR_logistic_uniform, MNAR_PSM, MNAR_GSM
 
 import numpy as np
 from torch.utils.data import Dataset
 from sklearn.utils import check_random_state
 from scipy.stats import norm
-from scipy.optimize import fsolve
 
 
 class BaseDataset(ABC, Dataset):
@@ -157,7 +157,7 @@ class MCARDataset(BaseDataset):
         super().__init__(*args, **kwargs)
 
     def _generate_mask(self):
-        return self.rng.binomial(n=1, p=self.missing_rate, size=self.X.shape)
+        return MCAR(self.X, self.missing_rate, self.rng)
 
 
 class MARDataset(BaseDataset):
@@ -170,64 +170,80 @@ class MARDataset(BaseDataset):
         self.model = model
         super().__init__(*args, **kwargs)
 
-    def _generate_mask_logistic(self):
-        n, d = self.X.shape
-
-        # number of variables that will have no missing values
-        # (at least one variable)
-        d_obs = max(int(self.p_obs * d), 1)
-        # number of variables that will have missing values
-        d_na = d - d_obs
-
-        # Sample variables that will all be observed, and those with missing values
-        idxs_obs = self.rng.choice(d, d_obs, replace=False)
-        idxs_nas = np.array([i for i in range(d) if i not in idxs_obs])
-
-        # Other variables will have NA proportions that depend on those observed
-        # variables, through a logistic model. The parameters of this logistic
-        # model are random, and adapted to the scale of each variable.
-        # var = np.var(X, axis=0)
-        # coeffs = rng.randn(d_obs, d_na)/np.sqrt(var[idxs_obs, None])
-
-        mu = self.X.mean(axis=0)
-        cov = (self.X - mu).T.dot(self.X - mu)/n
-        cov_obs = cov[np.ix_(idxs_obs, idxs_obs)]
-        coeffs = self.rng.randn(d_obs, d_na)
-        v = np.array([coeffs[:, j].dot(cov_obs).dot(
-            coeffs[:, j]) for j in range(d_na)])
-        steepness = self.rng.uniform(low=0.1, high=0.5, size=d_na)
-        coeffs /= steepness*np.sqrt(v)
-
-        # Rescale the sigmoid to have a desired amount of missing values
-        # ps = sigmoid(X[:, idxs_obs].dot(coeffs) + intercepts)
-        # ps /= (ps.mean(0) / p)
-
-        # Move the intercept to have the desired amount of missing values
-        intercepts = np.zeros((d_na))
-        for j in range(d_na):
-            w = coeffs[:, j]
-
-            def f(b):
-                s = Sigmoid()(self.X[:, idxs_obs].dot(w) + b) - self.missing_rate
-                return s.mean()
-
-            res = fsolve(f, x0=0)
-            intercepts[j] = res[0]
-
-        M = np.zeros_like(self.X)
-        ps = Sigmoid()(self.X[:, idxs_obs].dot(coeffs) + intercepts)
-        M[:, idxs_nas] = self.rng.binomial(n=1, p=ps)
-
-        return M
+    def _check_attributes(self):
+        available_models = ['logistic']
+        if self.model not in available_models:
+            raise ValueError(f'Unknown link "{self.model}". '
+                             f'Supported: {available_models}.')
+        super()._check_attributes()
 
     def _generate_mask(self):
         if self.model == 'logistic':
-            M = self._generate_mask_logistic()
+            return MAR_logistic(self.X, self.missing_rate,
+                                self.p_obs, self.rng)
 
-        else:
-            raise ValueError(f'Unknown MAR model {self.logistic}')
 
-        return M
+class MNARDataset(BaseDataset):
+    """Generate a dataset with MNAR missing values."""
+
+    def __init__(self, *args, missing_rate=None, p_params=None, model='logistic',
+                 k=None, sigma2_tilde=None, lbd=None, c=None, **kwargs):
+        self.missing_rate = missing_rate
+        self.p_params = p_params
+        self.model = model
+        self.k = k
+        self.sigma2_tilde = sigma2_tilde
+        self.lbd = lbd
+        self.c = c
+        super().__init__(*args, **kwargs)
+
+    def _check_attributes(self):
+        available_models = ['logistic', 'logistic_uniform', 'GSM', 'PSM']
+        if self.model not in available_models:
+            raise ValueError(f'Unknown link "{self.model}". '
+                             f'Supported: {available_models}.')
+
+        if self.model == 'logistic' and self.missing_rate is None:
+            raise ValueError('missing_rate is None.')
+
+        if self.model == 'logistic_uniform':
+            if self.missing_rate is None:
+                raise ValueError('missing_rate is None.')
+            if self.p_params is None:
+                raise ValueError('p_params is None.')
+
+        if self.model == 'GSM':
+            if self.k is None:
+                raise ValueError('k is None.')
+            if self.sigma2_tilde is None:
+                raise ValueError('sigma2_tilde is None.')
+            if self.mean is None:
+                raise ValueError('mean is None.')
+            if self.cov is None:
+                raise ValueError('cov is None.')
+
+        if self.model == 'PSM':
+            if self.lbd is None:
+                raise ValueError('lbd is None.')
+            if self.c is None:
+                raise ValueError('c is None.')
+
+        super()._check_attributes()
+
+    def _generate_mask(self):
+        if self.model == 'logistic':
+            return MNAR_logistic(self.X, self.missing_rate, self.rng)
+
+        elif self.model == 'logistic_uniform':
+            return MNAR_logistic_uniform(self.X, self.missing_rate,
+                                         self.p_params, self.rng)
+
+        elif self.model == 'GSM':
+            mu_tilde = self.mean + self.k*np.sqrt(np.diagonal(self.cov))
+            return MNAR_GSM(self.X, mu_tilde, self.sigma2_tilde, self.rng)
+
+        elif self.model == 'PSM':
+            return MNAR_PSM(self.X, self.lbd, self.c, self.rng)
 
 
 class Probit():
