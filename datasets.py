@@ -62,6 +62,29 @@ class BaseDataset(ABC, Dataset):
         self.M = self._generate_mask()
         np.putmask(self.X, self.M, np.nan)
 
+    def _check_attributes(self):
+        # Check attributes for the data generation
+        if self.X_model not in ['gaussian']:
+            raise ValueError(f'Unknown X model "{self.X_model}.')
+
+        if self.X_model == 'gaussian' and self.mean is None:
+            raise ValueError('mean is None.')
+
+        if self.X_model == 'gaussian' and self.cov is None:
+            raise ValueError('cov is None.')
+
+        # Check attributes for the outcome generation
+        available_links = ['logit', 'probit', 'linear', 'square', 'stairs']
+        if self.link not in available_links:
+            raise ValueError(f'Unknown link "{self.link}". '
+                             f'Supported: {available_links}.')
+
+        if self.link in ['square', 'stairs'] and self.curvature is None:
+            raise ValueError('curvature is None.')
+
+        if self.is_regression() and self.snr is None:
+            raise ValueError('snr is None')
+
     def _generate_X(self):
         if self.X_model == 'gaussian':
             X = self.rng.multivariate_normal(
@@ -104,29 +127,6 @@ class BaseDataset(ABC, Dataset):
             y += noise
 
         return y
-
-    def _check_attributes(self):
-        # Check attributes for the data generation
-        if self.X_model not in ['gaussian']:
-            raise ValueError(f'Unknown X model "{self.X_model}.')
-
-        if self.X_model == 'gaussian' and self.mean is None:
-            raise ValueError('mean is None.')
-
-        if self.X_model == 'gaussian' and self.cov is None:
-            raise ValueError('cov is None.')
-
-        # Check attributes for the outcome generation
-        available_links = ['logit', 'probit', 'linear', 'square', 'stairs']
-        if self.link not in available_links:
-            raise ValueError(f'Unknown link "{self.link}". '
-                             f'Supported: {available_links}.')
-
-        if self.link in ['square', 'stairs'] and self.curvature is None:
-            raise ValueError('curvature is None.')
-
-        if self.is_regression() and self.snr is None:
-            raise ValueError('snr is None')
 
     def is_classif(self):
         return self.link in ['logit', 'probit']
