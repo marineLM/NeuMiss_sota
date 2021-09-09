@@ -18,14 +18,19 @@ class BaseDataset(ABC, Dataset):
         ----------
         n_samples : int
         mean : np.array
+            Mean of the Gaussian data.
         cov : np.array
+            Covariance of the Gaussian data.
         link : str
             The model to use to generate the outcome y.
             'logit' or 'probit' for classifications.
             'linear', 'square' or 'stairs' for regressions.
         beta : np.array
+            Parameter to generate the outcome.
         curvature : float
+            For square and stairs links.
         snr : float
+            Signal to noise ratio for regression.
         X_model : str
             The model to use to generate the data X.
             'gaussian' for Gaussian data.
@@ -153,6 +158,13 @@ class MCARDataset(BaseDataset):
     """Generate a dataset with MCAR missing values."""
 
     def __init__(self, *args, missing_rate, **kwargs) -> None:
+        """
+        Parameters
+        ----------
+        missing_rate : float
+            Proportion of missing values to generate for variables which will
+            have missing values.
+        """
         self.missing_rate = missing_rate
         super().__init__(*args, **kwargs)
 
@@ -165,6 +177,18 @@ class MARDataset(BaseDataset):
 
     def __init__(self, *args, missing_rate, p_obs, model='logistic',
                  **kwargs) -> None:
+        """
+        Parameters
+        ----------
+        missing_rate : float
+            Proportion of missing values to generate for variables which will
+            have missing values.
+        p_obs : float
+            Proportion of variables with *no* missing values that will be used
+            for the logistic masking model.
+        model : str
+            Model to generate the mask. Available: "logistic".
+        """
         self.missing_rate = missing_rate
         self.p_obs = p_obs
         self.model = model
@@ -186,8 +210,30 @@ class MARDataset(BaseDataset):
 class MNARDataset(BaseDataset):
     """Generate a dataset with MNAR missing values."""
 
-    def __init__(self, *args, missing_rate=None, p_params=None, model='logistic',
-                 k=None, sigma2_tilde=None, lbd=None, c=None, **kwargs):
+    def __init__(self, *args, missing_rate=None, p_params=None,
+                 model='logistic', k=None, sigma2_tilde=None, lbd=None, c=None,
+                 **kwargs):
+        """
+        Parameters
+        ----------
+        missing_rate : float
+            Proportion of missing values to generate for variables which will
+            have missing values.
+        p_params : float
+            Proportion of variables that will be used for the logistic masking
+            model.
+        model : str
+            Model to generate the mask. Available: "logistic",
+            "logistic_uniform", "GSM", "PSM".
+        k : float
+            Used to compute mu_tilde for GSM.
+        sigma2_tilde : float
+            Used for GSM.
+        lbd : float
+            Used for PSM.
+        c : float
+            Used for PSM.
+        """
         self.missing_rate = missing_rate
         self.p_params = p_params
         self.model = model
