@@ -10,8 +10,14 @@ from scipy.optimize import fsolve
 from scipy.stats import norm
 
 
-def sigmoid(x):
-    return 1 / (1 + np.exp(-x))
+class Probit():
+    def __call__(self, x):
+        return norm.cdf(x)
+
+
+class Sigmoid():
+    def __call__(self, x):
+        return np.divide(1, 1 + np.exp(-x))
 
 
 def MCAR(X, p, random_state):
@@ -114,13 +120,13 @@ def MAR_logistic(X, p, p_obs, random_state):
         w = coeffs[:, j]
 
         def f(b):
-            s = sigmoid(X[:, idxs_obs].dot(w) + b) - p
+            s = Sigmoid()(X[:, idxs_obs].dot(w) + b) - p
             return s.mean()
 
         res = fsolve(f, x0=0)
         intercepts[j] = res[0]
 
-    ps = sigmoid(X[:, idxs_obs].dot(coeffs) + intercepts)
+    ps = Sigmoid()(X[:, idxs_obs].dot(coeffs) + intercepts)
     ber = rng.rand(n, d_na)
     mask[:, idxs_nas] = ber < ps
 
@@ -180,13 +186,13 @@ def MNAR_logistic(X, p, random_state):
         w = coeffs[:, j]
 
         def f(b):
-            s = sigmoid(X.dot(w) + b) - p
+            s = Sigmoid()(X.dot(w) + b) - p
             return s.mean()
 
         res = fsolve(f, x0=0)
         intercepts[j] = res[0]
 
-    ps = sigmoid(X.dot(coeffs) + intercepts)
+    ps = Sigmoid()(X.dot(coeffs) + intercepts)
     ber = rng.rand(n, d)
     mask = ber < ps
 
@@ -264,13 +270,13 @@ def MNAR_logistic_uniform(X, p, p_params, random_state):
         w = coeffs[:, j]
 
         def f(b):
-            s = sigmoid(X[:, idxs_params].dot(w) + b) - p
+            s = Sigmoid()(X[:, idxs_params].dot(w) + b) - p
             return s.mean()
 
         res = fsolve(f, x0=0)
         intercepts[j] = res[0]
 
-    ps = sigmoid(X[:, idxs_params].dot(coeffs) + intercepts)
+    ps = Sigmoid()(X[:, idxs_params].dot(coeffs) + intercepts)
     ber = rng.rand(n, d_na)
     mask[:, idxs_nas] = ber < ps
 

@@ -1,11 +1,11 @@
 """Simulate Gaussian datasets with MCAR, MAR or MNAR missing values."""
 from abc import ABC, abstractmethod
-from amputation import MCAR, MAR_logistic, MNAR_logistic, MNAR_logistic_uniform, MNAR_PSM, MNAR_GSM
+from amputation import (Probit, Sigmoid, MCAR, MAR_logistic, MNAR_logistic,
+                        MNAR_logistic_uniform, MNAR_PSM, MNAR_GSM)
 
 import numpy as np
 from torch.utils.data import Dataset
 from sklearn.utils import check_random_state
-from scipy.stats import norm
 
 
 class BaseDataset(ABC, Dataset):
@@ -90,7 +90,7 @@ class BaseDataset(ABC, Dataset):
                 y = dot_product - 1
                 for a, b in zip([2, -4, 2], [-0.8, -1, -1.2]):
                     tmp = np.sqrt(np.pi/8)*self.curvature*(dot_product + b)
-                    y += a*norm.cdf(tmp)
+                    y += a*Probit()(tmp)
 
             sigma2_noise = np.var(y)/self.snr
             noise = self.rng.normal(
@@ -244,15 +244,3 @@ class MNARDataset(BaseDataset):
 
         elif self.model == 'PSM':
             return MNAR_PSM(self.X, self.lbd, self.c, self.rng)
-
-
-class Probit():
-
-    def __call__(self, x):
-        return norm.cdf(x)
-
-
-class Sigmoid():
-
-    def __call__(self, x):
-        return np.divide(1, 1 + np.exp(-x))
