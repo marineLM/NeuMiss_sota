@@ -7,6 +7,7 @@ Adapted by Marine Le Morvan
 import numpy as np
 from sklearn.utils import check_random_state
 from scipy.optimize import fsolve
+from scipy.stats import norm
 
 
 def sigmoid(x):
@@ -277,5 +278,29 @@ def MNAR_logistic_uniform(X, p, p_params, random_state):
     # This makes the missingness of other variables potentially dependent on
     # masked values
     mask[:, idxs_params] = rng.rand(n, d_params) < p
+
+    return mask
+
+
+def MNAR_PSM(X, lbd, c, random_state):
+    """Missing not at random with Probit self-masking."""
+    rng = check_random_state(random_state)
+    mask = np.zeros_like(X)
+
+    for j in range(X.shape[1]):
+        prob = norm.cdf(lbd*X[:, j] - c[j])
+        mask[:, j] = rng.binomial(n=1, p=prob, size=X.shape[0])
+
+    return mask
+
+
+def MNAR_GSM(X, mu_tilde, sigma2_tilde, random_state):
+    """Missing not at random with Gaussian self-masking."""
+    rng = check_random_state(random_state)
+    mask = np.zeros_like(X)
+
+    for j in range(X.shape[1]):
+        prob = np.exp(-0.5*(X[:, j] - mu_tilde[j])**2/sigma2_tilde[j])
+        mask[:, j] = rng.binomial(n=1, p=prob, size=X.shape[0])
 
     return mask
