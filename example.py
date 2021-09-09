@@ -1,6 +1,7 @@
 """Example of use of Datasets classes."""
 import numpy as np
-from torch.utils.data import Subset
+from sklearn.utils import shuffle
+from torch.utils.data import DataLoader, Subset, random_split
 
 from datasets import CompleteDataset, MARDataset, MCARDataset, MNARDataset
 
@@ -13,7 +14,7 @@ mean = np.ones(p)
 cov = np.eye(p)
 
 # Parameters of data generation
-beta = np.ones(p+1)
+beta = np.ones(p + 1)
 beta[0] = -5
 
 # Links available for y
@@ -53,3 +54,15 @@ n_sizes = [3, 5, 9]
 for n_size in n_sizes:
     sub_ds = Subset(ds, range(n_size))
     print(f'Subdataset size: {len(sub_ds)}')
+
+# Split a dataset into train, val and test sets
+train_ds, val_ds, test_ds = random_split(ds, [5, 3, 2])
+
+# Use dataloaders
+train_loader = DataLoader(train_ds, batch_size=2, shuffle=True)
+val_loader = DataLoader(val_ds, batch_size=2, shuffle=True)
+test_loader = DataLoader(test_ds, batch_size=2, shuffle=True)
+
+# Iterate over dataloaders
+for train_features, train_labels in train_loader:
+    print(train_features, train_labels)
