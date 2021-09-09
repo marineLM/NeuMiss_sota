@@ -42,8 +42,8 @@ class BaseDataset(ABC, Dataset):
         self.snr = snr
         self.random_state = random_state
 
+        # Check attributes
         self._check_attributes()
-
         self.rng = check_random_state(random_state)
 
         # Generate data
@@ -58,25 +58,13 @@ class BaseDataset(ABC, Dataset):
 
     def _generate_X(self):
         if self.X_model == 'gaussian':
-            if self.mean is None or self.cov is None:
-                raise ValueError('mean or cov is None.')
-
             X = self.rng.multivariate_normal(
                 mean=self.mean, cov=self.cov,
                 size=self.n_samples, check_valid='raise')
 
-        else:
-            raise ValueError(f'Unknown X model "{self.X_model}.')
-
         return X
 
     def _generate_y(self, X):
-        if self.link not in self.available_links():
-            raise ValueError(
-                f'Unknown link "{self.link}".'
-                f'Supported: {self.available_links()}.'
-                )
-
         dot_product = X.dot(self.beta[1:]) + self.beta[0]
 
         if self.is_classif():
@@ -85,9 +73,6 @@ class BaseDataset(ABC, Dataset):
 
             elif self.link == 'probit':
                 link_fn = Probit()
-
-            else:
-                raise ValueError(f'Unknown link "{self.link}"')
 
             # Y ~ Binomial(link(<X,Beta>))
             probas = link_fn(dot_product)
@@ -99,25 +84,13 @@ class BaseDataset(ABC, Dataset):
                 y = dot_product
 
             elif self.link == 'square':
-                if self.curvature is None:
-                    raise ValueError('curvature is None.')
-
                 y = self.curvature*(dot_product-1)**2
 
             elif self.link == 'stairs':
-                if self.curvature is None:
-                    raise ValueError('curvature is None.')
-
                 y = dot_product - 1
                 for a, b in zip([2, -4, 2], [-0.8, -1, -1.2]):
                     tmp = np.sqrt(np.pi/8)*self.curvature*(dot_product + b)
                     y += a*norm.cdf(tmp)
-
-            else:
-                raise ValueError(f'Unknown link "{self.link}"')
-
-            if self.snr is None:
-                raise ValueError('snr is None')
 
             sigma2_noise = np.var(y)/self.snr
             noise = self.rng.normal(
@@ -127,11 +100,27 @@ class BaseDataset(ABC, Dataset):
         return y
 
     def _check_attributes(self):
-        pass
+        # Check attributes for the data generation
+        if self.X_model not in ['gaussian']:
+            raise ValueError(f'Unknown X model "{self.X_model}.')
 
-    @staticmethod
-    def available_links():
-        return ['logit', 'probit', 'linear', 'square', 'stairs']
+        if self.X_model == 'gaussian' and self.mean is None:
+            raise ValueError('mean is None.')
+
+        if self.X_model == 'gaussian' and self.cov is None:
+            raise ValueError('cov is None.')
+
+        # Check attributes for the outcome generation
+        available_links = ['logit', 'probit', 'linear', 'square', 'stairs']
+        if self.link not in available_links:
+            raise ValueError(f'Unknown link "{self.link}". '
+                             f'Supported: {available_links}.')
+
+        if self.link in ['square', 'stairs'] and self.curvature is None:
+            raise ValueError('curvature is None.')
+
+        if self.is_regression() and self.snr is None:
+            raise ValueError('snr is None')
 
     def is_classif(self):
         return self.link in ['logit', 'probit']
