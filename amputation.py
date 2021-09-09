@@ -3,11 +3,10 @@ data mechanisms. It was inspired from
 https://github.com/BorisMuzellec/MissingDataOT/blob/master/utils.py
 Adapted by Marine Le Morvan
 '''
-
 import numpy as np
-from sklearn.utils import check_random_state
 from scipy.optimize import fsolve
 from scipy.stats import norm
+from sklearn.utils import check_random_state
 
 
 class Probit():

@@ -2,7 +2,7 @@
 import numpy as np
 from torch.utils.data import Subset
 
-from datasets import CompleteDataset, MCARDataset, MARDataset, MNARDataset
+from datasets import CompleteDataset, MARDataset, MCARDataset, MNARDataset
 
 # Size of data
 n = 10  # samples

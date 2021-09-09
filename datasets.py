@@ -1,11 +1,12 @@
 """Simulate Gaussian datasets with MCAR, MAR or MNAR missing values."""
 from abc import ABC, abstractmethod
-from amputation import (Probit, Sigmoid, MCAR, MAR_logistic, MNAR_logistic,
-                        MNAR_logistic_uniform, MNAR_PSM, MNAR_GSM)
 
 import numpy as np
-from torch.utils.data import Dataset
 from sklearn.utils import check_random_state
+from torch.utils.data import Dataset
+
+from amputation import (MCAR, MNAR_GSM, MNAR_PSM, MAR_logistic, MNAR_logistic,
+                        MNAR_logistic_uniform, Probit, Sigmoid)
 
 
 class BaseDataset(ABC, Dataset):
