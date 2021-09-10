@@ -1,6 +1,5 @@
 """Example of use of Datasets classes."""
 import numpy as np
-from sklearn.utils import shuffle
 from torch.utils.data import DataLoader, Subset, random_split
 
 from datasets import CompleteDataset, MARDataset, MCARDataset, MNARDataset
@@ -66,3 +65,6 @@ test_loader = DataLoader(test_ds, batch_size=2, shuffle=True)
 # Iterate over dataloaders
 for train_features, train_labels in train_loader:
     print(train_features, train_labels)
+
+# Access data parameters of a dataset
+print(ds.get_data_params())
