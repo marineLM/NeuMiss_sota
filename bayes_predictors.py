@@ -1,6 +1,7 @@
 """Bayes predictors for supervised learning with missing values."""
 from abc import ABC, abstractmethod
 import numpy as np
+import warnings
 
 from datasets import CompleteDataset, MCARDataset, MNARDataset, get_link_function
 from amputation import Sigmoid, Probit, Square, Stairs
@@ -22,6 +23,7 @@ class BaseBayesPredictor(ABC):
                  lbd=None,
                  c=None,
                  compute_probas=None,
+                 mv_mechanism=None,
                  **kwargs,
                  ) -> None:
         """
@@ -43,6 +45,7 @@ class BaseBayesPredictor(ABC):
         self.lbd = lbd
         self.c = c
         self.compute_probas = compute_probas
+        self.mv_mechanism = mv_mechanism
         self._check_attributes()
 
     def _check_attributes(self):
@@ -82,6 +85,16 @@ class BaseBayesPredictor(ABC):
     def is_regression(self):
         return not self.is_classif()
 
+    def _unpack_predict_result(self, r):
+        if self.compute_probas:  # unzip
+            y_pred, y_prob = zip(*r)
+            y_pred = np.array(y_pred)
+            y_prob = np.array(y_prob)
+            return y_pred, y_prob
+
+        y_pred = np.array(r)
+        return y_pred
+
 
 class CompleteBayesPredictor(BaseBayesPredictor):
     """Bayes predictor on complete data."""
@@ -111,9 +124,10 @@ class CompleteBayesPredictor(BaseBayesPredictor):
 class MARBayesPredictor(BaseBayesPredictor):
     """Bayes predictor on MAR and MCAR data."""
 
-    def __init__(self, X_model, mean=None, cov=None, order0=None, **kwargs):
+    def __init__(self, beta, X_model='gaussian', mean=None, cov=None,
+                 order0=None, **kwargs):
         self.order0 = order0
-        super().__init__(X_model=X_model, mean=mean, cov=cov, **kwargs)
+        super().__init__(beta=beta, X_model=X_model, mean=mean, cov=cov, **kwargs)
 
     def _check_attributes(self):
         if self.link == 'logit':
@@ -192,12 +206,90 @@ class MARBayesPredictor(BaseBayesPredictor):
             return pred
 
         r = [predict_one(x) for x in X]
+        return self._unpack_predict_result(r)
 
-        if self.compute_probas:  # unzip
-            y_pred, y_prob = zip(*r)
-            y_pred = np.array(y_pred)
-            y_prob = np.array(y_prob)
-            return y_pred, y_prob
 
-        y_pred = np.array(r)
-        return y_pred
+class MNARBayesPredictor(BaseBayesPredictor):
+    """Bayes predictor on MNAR data."""
+
+    def __init__(self, beta, X_model='gaussian', mean=None, cov=None,
+                 order0=None, k=None, sigma2_tilde=None, **kwargs):
+        self.order0 = order0
+        super().__init__(beta=beta, X_model=X_model, mean=mean, cov=cov,
+                         k=k, sigma2_tilde=sigma2_tilde, **kwargs)
+
+    def _check_attributes(self):
+        super()._check_attributes()
+        if self.mv_mechanism != 'MNAR':
+            warnings.warn(
+                f'You use a MNAR Bayes predictor on {self.mv_mechanism} data.')
+        if self.model is None:
+            raise ValueError('model is None.')
+        if self.link == 'logit':
+            raise NotImplementedError('No MNAR Bayes predictor for logit yet.')
+        if self.model != 'GSM':
+            raise NotImplementedError(
+                f'No MNAR Bayes predictor for "{self.model}" model yet.')
+        if self.model == 'probit' and self.compute_probas:
+            raise NotImplementedError('No probas for probit yet.')
+
+    def predict(self, X):
+        mu_tilde = self.mean + self.k*np.sqrt(np.diag(self.cov))
+
+        def predict_one(x):
+            mis = np.where(np.isnan(x))[0]
+            obs = np.where(~np.isnan(x))[0]
+
+            D_mis_inv = np.diag(1/self.sigma2_tilde[mis])
+
+            cov_misobs = self.cov[np.ix_(mis, obs)]
+            cov_obs_inv = np.linalg.inv(self.cov[np.ix_(obs, obs)])
+            cov_mis = self.cov[np.ix_(mis, mis)]
+
+            mu_mis_obs = self.mean[mis] + cov_misobs.dot(cov_obs_inv).dot(
+                x[obs] - self.mean[obs])
+            cov_mis_obs = cov_mis - cov_misobs.dot(cov_obs_inv).dot(
+                cov_misobs.T)
+            cov_mis_obs_inv = np.linalg.inv(cov_mis_obs)
+
+            S = np.linalg.inv(D_mis_inv + cov_mis_obs_inv)
+            s = S.dot(D_mis_inv.dot(mu_tilde[mis]) +
+                      cov_mis_obs_inv.dot(mu_mis_obs))
+
+            dot_product = self.beta[0] + self.beta[obs + 1].dot(x[obs]) + \
+                self.beta[mis + 1].dot(s)
+
+            if self.link == 'linear':
+                pred = dot_product
+
+            elif self.link in ['square', 'stairs']:
+                link_fn = get_link_function(self.link,
+                                            curvature=self.curvature)
+                var_Tmis = self.beta[mis + 1].dot(S).dot(self.beta[mis + 1])
+
+                if self.link == 'square':
+                    pred0 = link_fn(dot_product)
+                    pred = pred0 + self.curvature*var_Tmis
+
+                elif self.link == 'stairs':
+                    pred0 = link_fn(dot_product)
+                    pred = dot_product - 1
+                    for a, b in zip([2, -4, 2], [-0.8, -1, -1.2]):
+                        pred += a*Probit()((dot_product + b)/np.sqrt(
+                            1/(np.pi/8*self.curvature**2) + var_Tmis))
+
+                if self.order0:
+                    pred = pred0
+
+            elif self.link == 'probit':
+                link_fn = get_link_function(self.link)
+                nu = dot_product
+                pred = nu > 0
+
+                if self.compute_probas:
+                    raise NotImplementedError('No proba for probit yet.')
+
+            return pred
+
+        r = [predict_one(x) for x in X]
+        return self._unpack_predict_result(r)
