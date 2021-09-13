@@ -135,6 +135,7 @@ class MARBayesPredictor(BaseBayesPredictor):
         super()._check_attributes()
 
     def predict(self, X):
+        X = np.atleast_2d(X)
 
         def predict_one(x):
             mis = np.where(np.isnan(x))[0]
@@ -236,6 +237,7 @@ class MNARBayesPredictor(BaseBayesPredictor):
             raise NotImplementedError('No probas for probit yet.')
 
     def predict(self, X):
+        X = np.atleast_2d(X)
         mu_tilde = self.mean + self.k*np.sqrt(np.diag(self.cov))
 
         def predict_one(x):

@@ -12,10 +12,10 @@ class TestMARBayes(unittest.TestCase):
         mean = np.array([1, 2])
         cov = np.array([[1, 0],
                         [0, 2]])
-        X_complete = np.atleast_2d([-1., -2.])
+        X_complete = np.array([-1., -2.])
 
         # First value missing
-        M = np.atleast_2d([1, 0])
+        M = np.array([1, 0])
         X = np.where(M, np.nan, X_complete)
 
         predictor = MARBayesPredictor(beta, X_model='gaussian', mean=mean,
@@ -32,7 +32,7 @@ class TestMARBayes(unittest.TestCase):
         mean = np.array([1, 2])
         cov = np.array([[1, 0],
                         [0, 2]])
-        X_complete = np.atleast_2d([-1., -2.])
+        X_complete = np.array([-1., -2.])
 
         # Second value missing
         M = np.array([0, 1])
@@ -52,7 +52,7 @@ class TestMARBayes(unittest.TestCase):
         mean = np.array([1, 2])
         cov = np.array([[1, 0],
                         [0, 2]])
-        X_complete = np.atleast_2d([-1., -2.])
+        X_complete = np.array([-1., -2.])
 
         # No missing value
         predictor = MARBayesPredictor(beta, X_model='gaussian', mean=mean,
@@ -69,7 +69,7 @@ class TestMARBayes(unittest.TestCase):
         mean = np.array([1, 2])
         cov = np.array([[1, 0],
                         [0, 2]])
-        X_complete = np.atleast_2d([-1., -2.])
+        X_complete = np.array([-1., -2.])
 
         # No missing value
         M = np.array([1, 1])
