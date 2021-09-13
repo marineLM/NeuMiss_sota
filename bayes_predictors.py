@@ -192,13 +192,15 @@ class MARBayesPredictor(BaseBayesPredictor):
                 pred = nu > 0
 
                 if self.compute_probas:
-                    if len(obs) * len(mis) > 0:
+                    if len(mis) > 0:  # If at least one variable is missing
                         cov_mismis = self.cov[np.ix_(mis, mis)]
-                        cov_misgobs = cov_mismis - cov_misobs.dot(cov_obs_inv).dot(cov_misobs.T)
+                        cov_misgobs = cov_mismis
+                        if len(obs) > 0:  # If at least one variable is observed
+                            cov_misgobs = cov_misgobs - cov_misobs.dot(cov_obs_inv).dot(cov_misobs.T)
                         s2 = self.beta[mis + 1].dot(cov_misgobs).dot(self.beta[mis + 1])
                     else:
                         s2 = 0
-                    prob = link_fn(nu/np.square(1 + s2))
+                    prob = link_fn(nu/np.sqrt(1 + s2))
 
             if self.compute_probas:
                 return pred, prob
