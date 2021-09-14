@@ -2,3 +2,4 @@ numpy
 sklearn
 torch
 scipy
+pytorch-lightning
