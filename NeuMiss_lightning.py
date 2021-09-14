@@ -1,5 +1,5 @@
 '''Implements Neumann with the posibility to do batch learning'''
-
+import os
 import math
 import numpy as np
 from sklearn.base import BaseEstimator
@@ -7,7 +7,6 @@ from abc import ABC
 
 import torch.nn as nn
 import torch
-from torch.utils.data.sampler import RandomSampler
 # from torch.utils.data.dataset import TensorDataset
 from torchmetrics import Accuracy, R2Score
 from torch.nn.modules.loss import BCELoss
@@ -412,8 +411,9 @@ class BaseNeuMiss(BaseEstimator, NeuMiss):
         n_train = len(dataset) - n_val
         ds_train, ds_val = random_split(dataset, [n_train, n_val])
         train_loader = DataLoader(ds_train, batch_size=self.batch_size,
-                                  shuffle=True)
-        val_loader = DataLoader(ds_val, batch_size=self.batch_size)
+                                  shuffle=True, num_workers=os.cpu_count())
+        val_loader = DataLoader(ds_val, batch_size=self.batch_size,
+                                num_workers=os.cpu_count())
 
         lr_monitor_callback = LearningRateMonitor(logging_interval='step')
         callbacks = [lr_monitor_callback]
