@@ -478,12 +478,12 @@ class NeuMissClassifier(BaseNeuMiss):
                  beta0=None, L=None, tmu=None, tsigma=None,
                  coefs=None, optimizer='adam', lr=1e-3, weight_decay=1e-4,
                  random_state=0):
-        self.max_epochs = max_epochs
-        self.batch_size = batch_size
-        self.early_stopping = early_stopping
         super().__init__(n_features=n_features,
                          mode=mode,
                          depth=depth,
+                         max_epochs=max_epochs,
+                         batch_size=batch_size,
+                         early_stopping=early_stopping,
                          residual_connection=residual_connection,
                          mlp_depth=mlp_depth,
                          width_factor=width_factor,
