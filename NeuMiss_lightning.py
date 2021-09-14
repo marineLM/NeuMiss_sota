@@ -376,6 +376,7 @@ class BaseNeuMiss(BaseEstimator, NeuMiss):
         self.max_epochs = max_epochs
         self.batch_size = batch_size
         self.early_stopping = early_stopping
+        self.trainer = None
         super().__init__(n_features=n_features,
                          mode=mode,
                          depth=depth,
@@ -399,8 +400,12 @@ class BaseNeuMiss(BaseEstimator, NeuMiss):
                          random_state=random_state,
                          )
 
+    @staticmethod
+    def _Xy_to_dataset(X, y):
+        return TensorDataset(torch.from_numpy(X), torch.from_numpy(y))
+
     def fit(self, X, y, percent_val=0.1):
-        dataset = TensorDataset(torch.from_numpy(X), torch.from_numpy(y))
+        dataset = self._Xy_to_dataset(X, y)
         return self.fit_from_dataset(dataset, percent_val=percent_val)
 
     def fit_from_dataset(self, dataset, percent_val=0.1):
@@ -425,8 +430,19 @@ class BaseNeuMiss(BaseEstimator, NeuMiss):
         trainer = pl.Trainer(deterministic=True, max_epochs=self.max_epochs,
                              callbacks=callbacks)
         trainer.fit(self, train_loader, val_loader)
+        self.trainer = trainer
 
         return self
+
+    def test(self, X, y, ckpt_path='best'):
+        dataset = self._Xy_to_dataset(X, y)
+        return self.test_from_dataset(dataset, ckpt_path=ckpt_path)
+
+    def test_from_dataset(self, dataset, ckpt_path='best'):
+        test_loader = DataLoader(dataset, batch_size=self.batch_size)
+
+        trainer = pl.Trainer() if self.trainer is None else self.trainer
+        return trainer.test(self, test_loader, ckpt_path=ckpt_path)
 
 
 class NeuMissRegressor(BaseNeuMiss):
