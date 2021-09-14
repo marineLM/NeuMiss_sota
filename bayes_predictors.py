@@ -79,6 +79,10 @@ class BaseBayesPredictor(ABC):
     def predict(self, X):
         pass
 
+    def predict_from_dataset(self, dataset):
+        X = np.atleast_2d([x for x, _ in dataset])
+        return self.predict(X)
+
     def is_classif(self):
         return self.link in ['logit', 'probit']
 
