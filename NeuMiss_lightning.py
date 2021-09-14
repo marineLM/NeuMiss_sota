@@ -3,15 +3,20 @@
 import math
 import numpy as np
 from sklearn.base import BaseEstimator
+from abc import ABC
 
 import torch.nn as nn
 import torch
+# from torch.utils.data.dataset import TensorDataset
 from torchmetrics import Accuracy, R2Score
 from torch.nn.modules.loss import BCELoss
 import torch.optim as optim
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 # from pytorchtools import EarlyStopping
 import pytorch_lightning as pl
+from torch.utils.data import TensorDataset, DataLoader, random_split
+from torch import Tensor
+from pytorch_lightning.callbacks import LearningRateMonitor, EarlyStopping
 
 
 class Neumiss(pl.LightningModule):
@@ -300,3 +305,130 @@ class Neumiss(pl.LightningModule):
         self.log('val_loss', loss, prog_bar=True)
         self.log('val_score', score, prog_bar=True)
         return loss
+
+
+class _NeuMissEstimator(BaseEstimator, Neumiss):
+
+    def __init__(self, n_features, mode, depth, classif, max_epochs=1000,
+                 batch_size=100, early_stopping=True,
+                 residual_connection=False,
+                 mlp_depth=0, width_factor=1, init_type='normal',
+                 add_mask=False, Sigma_gt=None, mu_gt=None, beta_gt=None,
+                 beta0_gt=None, L_gt=None, tmu_gt=None, tsigma_gt=None,
+                 coefs=None, optimizer='adam', lr=1e-3, weight_decay=1e-4):
+        self.max_epochs = max_epochs
+        self.batch_size = batch_size
+        self.early_stopping = early_stopping
+        super().__init__(n_features=n_features,
+                         mode=mode,
+                         depth=depth,
+                         residual_connection=residual_connection,
+                         mlp_depth=mlp_depth,
+                         width_factor=width_factor,
+                         init_type=init_type,
+                         add_mask=add_mask,
+                         Sigma_gt=Sigma_gt,
+                         mu_gt=mu_gt,
+                         beta_gt=beta_gt,
+                         beta0_gt=beta0_gt,
+                         L_gt=L_gt,
+                         tmu_gt=tmu_gt,
+                         tsigma_gt=tsigma_gt,
+                         coefs=coefs,
+                         optimizer=optimizer,
+                         lr=lr,
+                         weight_decay=weight_decay,
+                         classif=classif)
+
+    def fit(self, X, y, percent_val=0.1):
+        dataset = TensorDataset(torch.from_numpy(X), torch.from_numpy(y))
+        return self.fit_from_dataset(dataset, percent_val=percent_val)
+
+    def fit_from_dataset(self, dataset, percent_val=0.1):
+        n_val = int(percent_val*len(dataset))
+        n_train = len(dataset) - n_val
+        ds_train, ds_val = random_split(dataset, [n_train, n_val])
+        train_loader = DataLoader(ds_train, batch_size=self.batch_size)
+        val_loader = DataLoader(ds_val, batch_size=self.batch_size)
+
+        lr_monitor_callback = LearningRateMonitor(logging_interval='step')
+        callbacks = [lr_monitor_callback]
+
+        early_stop_callback = EarlyStopping(monitor='val_loss')
+        if self.early_stopping:
+            callbacks.append(early_stop_callback)
+
+        trainer = pl.Trainer(deterministic=True, max_epochs=self.max_epochs, callbacks=callbacks)
+        # trainer = pl.Trainer(gpus=0, precision=16, limit_train_batches=0.5, deterministic=True)
+        trainer.fit(self, train_loader, val_loader)
+
+        return self
+
+
+class NeuMissRegressor(_NeuMissEstimator):
+
+    def __init__(self, n_features, mode, depth, max_epochs=1000,
+                 batch_size=100, early_stopping=True,
+                 residual_connection=False,
+                 mlp_depth=0, width_factor=1, init_type='normal',
+                 add_mask=False, Sigma_gt=None, mu_gt=None, beta_gt=None,
+                 beta0_gt=None, L_gt=None, tmu_gt=None, tsigma_gt=None,
+                 coefs=None, optimizer='adam', lr=1e-3, weight_decay=1e-4):
+        self.max_epochs = max_epochs
+        self.batch_size = batch_size
+        self.early_stopping = early_stopping
+        super().__init__(n_features=n_features,
+                         mode=mode,
+                         depth=depth,
+                         residual_connection=residual_connection,
+                         mlp_depth=mlp_depth,
+                         width_factor=width_factor,
+                         init_type=init_type,
+                         add_mask=add_mask,
+                         Sigma_gt=Sigma_gt,
+                         mu_gt=mu_gt,
+                         beta_gt=beta_gt,
+                         beta0_gt=beta0_gt,
+                         L_gt=L_gt,
+                         tmu_gt=tmu_gt,
+                         tsigma_gt=tsigma_gt,
+                         coefs=coefs,
+                         optimizer=optimizer,
+                         lr=lr,
+                         weight_decay=weight_decay,
+                         classif=False)
+
+
+class NeuMissClassifier(_NeuMissEstimator):
+
+    def __init__(self, n_features, mode, depth, max_epochs=1000,
+                 batch_size=100, early_stopping=True,
+                 residual_connection=False,
+                 mlp_depth=0, width_factor=1, init_type='normal',
+                 add_mask=False, Sigma_gt=None, mu_gt=None, beta_gt=None,
+                 beta0_gt=None, L_gt=None, tmu_gt=None, tsigma_gt=None,
+                 coefs=None, optimizer='adam', lr=1e-3, weight_decay=1e-4):
+        self.max_epochs = max_epochs
+        self.batch_size = batch_size
+        self.early_stopping = early_stopping
+        super().__init__(n_features=n_features,
+                         mode=mode,
+                         depth=depth,
+                         residual_connection=residual_connection,
+                         mlp_depth=mlp_depth,
+                         width_factor=width_factor,
+                         init_type=init_type,
+                         add_mask=add_mask,
+                         Sigma_gt=Sigma_gt,
+                         mu_gt=mu_gt,
+                         beta_gt=beta_gt,
+                         beta0_gt=beta0_gt,
+                         L_gt=L_gt,
+                         tmu_gt=tmu_gt,
+                         tsigma_gt=tsigma_gt,
+                         coefs=coefs,
+                         optimizer=optimizer,
+                         lr=lr,
+                         weight_decay=weight_decay,
+                         classif=True)
+
