@@ -14,10 +14,12 @@ import pytorch_lightning as pl
 
 
 class Neumiss(pl.LightningModule):
-    def __init__(self, n_features, mode, depth, residual_connection=False, mlp_depth=0,
-                 width_factor=1, init_type='normal', add_mask=False, Sigma_gt=None, mu_gt=None, beta_gt=None,
-                 beta0_gt=None, L_gt=None, tmu_gt=None, tsigma_gt=None, coefs=None, optimizer='adam',
-                 lr=1e-3, weight_decay=1e-4, classif=False):
+    def __init__(self, n_features, mode, depth, residual_connection=False,
+                 mlp_depth=0, width_factor=1, init_type='normal',
+                 add_mask=False, Sigma_gt=None, mu_gt=None, beta_gt=None,
+                 beta0_gt=None, L_gt=None, tmu_gt=None, tsigma_gt=None,
+                 coefs=None, optimizer='adam', lr=1e-3, weight_decay=1e-4,
+                 classif=False):
         super().__init__()
         self.n_features = n_features
         self.mode = mode
@@ -271,7 +273,8 @@ class Neumiss(pl.LightningModule):
 
         return {
             'optimizer': optimizer,
-            # 'lr_scheduler':  scheduler,
+            'lr_scheduler':  scheduler,
+            'monitor': 'val_loss',
         }
 
     def training_step(self, train_batch, batch_idx):
@@ -280,6 +283,7 @@ class Neumiss(pl.LightningModule):
         m = torch.isnan(x)
         y_hat = self(x, m)
         loss = self.loss(y_hat, y.double())
+        self.log('train_loss', loss)
         return loss
 
     def validation_step(self, val_batch, batch_idx):
@@ -288,4 +292,5 @@ class Neumiss(pl.LightningModule):
         m = torch.isnan(x)
         y_hat = self(x, m)
         loss = self.loss(y_hat, y.double())
+        self.log('val_loss', loss)
         return loss
