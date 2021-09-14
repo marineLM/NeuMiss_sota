@@ -1,15 +1,16 @@
 """Simulate Gaussian datasets with MCAR, MAR or MNAR missing values."""
 from abc import ABC, abstractmethod
 
+import torch
 import numpy as np
 from sklearn.utils import check_random_state
-from torch.utils.data import Dataset
+from torch.utils.data import TensorDataset
 
 from amputation import (MCAR, MNAR_GSM, MNAR_PSM, MAR_logistic, MNAR_logistic,
                         MNAR_logistic_uniform, Probit, Sigmoid, Square, Stairs)
 
 
-class BaseDataset(ABC, Dataset):
+class BaseDataset(ABC, TensorDataset):
     """Abstract dataset class."""
 
     def __init__(self, n_samples, mean, cov, link, beta, curvature=None,
@@ -37,7 +38,6 @@ class BaseDataset(ABC, Dataset):
             'gaussian' for Gaussian data.
         random_state : int
         """
-        super().__init__()
         self.n_samples = n_samples
         self.X_model = X_model
         self.mean = mean
@@ -61,6 +61,9 @@ class BaseDataset(ABC, Dataset):
         # Generate missing values in the data
         self.M = self._generate_mask()
         np.putmask(self.X, self.M, np.nan)
+
+        # Create a TensorDataset
+        super().__init__(torch.from_numpy(self.X), torch.from_numpy(self.y))
 
     def _check_attributes(self):
         # Check attributes for the data generation
@@ -121,14 +124,6 @@ class BaseDataset(ABC, Dataset):
     def _generate_mask(self):
         # Function to be implemented by child classes
         pass
-
-    def __getitem__(self, index):
-        """Return a sample and its outcome from the dataset."""
-        return self.X[index, :], self.y[index]
-
-    def __len__(self):
-        """Return the number of samples of the dataset."""
-        return self.X.shape[0]
 
     def get_data_params(self):
         """Retrieve the parameters used to generate the data."""
