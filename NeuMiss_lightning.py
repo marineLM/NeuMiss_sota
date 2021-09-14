@@ -19,7 +19,7 @@ from torch import Tensor
 from pytorch_lightning.callbacks import LearningRateMonitor, EarlyStopping
 
 
-class Neumiss(pl.LightningModule):
+class NeuMiss(pl.LightningModule):
     def __init__(self, n_features, mode, depth, residual_connection=False,
                  mlp_depth=0, width_factor=1, init_type='normal',
                  add_mask=False, Sigma=None, mu=None, beta=None,
@@ -307,7 +307,7 @@ class Neumiss(pl.LightningModule):
         return loss
 
 
-class _NeuMissEstimator(BaseEstimator, Neumiss):
+class BaseNeuMiss(BaseEstimator, NeuMiss):
 
     def __init__(self, n_features, mode, depth, classif, max_epochs=1000,
                  batch_size=100, early_stopping=True,
@@ -365,7 +365,7 @@ class _NeuMissEstimator(BaseEstimator, Neumiss):
         return self
 
 
-class NeuMissRegressor(_NeuMissEstimator):
+class NeuMissRegressor(BaseNeuMiss):
 
     def __init__(self, n_features, mode, depth, max_epochs=1000,
                  batch_size=100, early_stopping=True,
@@ -399,69 +399,7 @@ class NeuMissRegressor(_NeuMissEstimator):
                          classif=False)
 
 
-class NeuMissClassifier(_NeuMissEstimator):
-        """The Neumiss neural network
-
-    Parameters
-    ----------
-
-    mode: str
-        One of:
-        * 'baseline': The weight matrices for the Neumann iteration are not
-        shared.
-        * 'shared': The weight matrices for the Neumann iteration are shared.
-        * 'shared_accelerated': The weight matrices for the Neumann iterations
-        are shared and one corefficient per residual connection can be learned
-        for acceleration.
-        * 'analytical_MAR_accelerated', 'analytical_GSM_accelerated',
-        'analytical_MAR', 'analytical_GSM': The weights of the Neumann block
-        are set to their ground truth values, only the MLP block is learned.
-        The accelerated version uses the values of coefs passed as arguments
-        while in the non accelerated version, the coefs are set to 1.
-
-    depth: int
-        The number of Neumann iterations.
-
-    n_epochs: int
-        The maximum number of epochs.
-
-    batch_size: int
-
-    lr: float
-        The learning rate.
-
-    weight_decay: float
-        The weight decay parameter.
-
-    early_stopping: boolean
-        If True, early stopping is used based on the validaton set, with a
-        patience of 15 epochs.
-
-    optimizer: srt
-        One of `sgd`or `adam`.
-
-    residual_connection: boolean
-        If True, the residual connection of the Neumann network are
-        implemented.
-
-    mlp_depth: int
-        The depth of the MLP stacked on top of the Neuman iterations.
-
-    width_factor: int
-        The width of the MLP stacked on top of the NeuMiss layer is calculated
-        as width_factor times n_features.
-
-    init_type: str
-        The type of initialisation for the parameters. Either 'normal',
-        'uniform', or 'custom_normal'. If 'custom_normal', the values provided
-        for the parameter `Sigma`, `mu`, `L` (and `coefs` if accelerated) are
-        used to initialise the Neumann block.
-
-    add_mask: boolean
-        If True, the mask is concatenated to the output of the NeuMiss block.
-
-    verbose: boolean
-    """
+class NeuMissClassifier(BaseNeuMiss):
 
     def __init__(self, n_features, mode, depth, max_epochs=1000,
                  batch_size=100, early_stopping=True,
