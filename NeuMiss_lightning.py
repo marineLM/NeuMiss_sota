@@ -7,6 +7,7 @@ from abc import ABC
 
 import torch.nn as nn
 import torch
+from torch.utils.data.sampler import RandomSampler
 # from torch.utils.data.dataset import TensorDataset
 from torchmetrics import Accuracy, R2Score
 from torch.nn.modules.loss import BCELoss
@@ -17,6 +18,7 @@ import pytorch_lightning as pl
 from torch.utils.data import TensorDataset, DataLoader, random_split
 from torch import Tensor
 from pytorch_lightning.callbacks import LearningRateMonitor, EarlyStopping
+from pytorch_lightning import seed_everything
 
 
 class NeuMiss(pl.LightningModule):
@@ -25,7 +27,7 @@ class NeuMiss(pl.LightningModule):
                  add_mask=False, Sigma=None, mu=None, beta=None,
                  beta0=None, L=None, tmu=None, tsigma=None,
                  coefs=None, optimizer='adam', lr=1e-3, weight_decay=1e-4,
-                 classif=False):
+                 classif=False, random_state=0):
         super().__init__()
         self.n_features = n_features
         self.mode = mode
@@ -40,11 +42,14 @@ class NeuMiss(pl.LightningModule):
         self.lr = lr
         self.weight_decay = weight_decay
         self.classif = classif
+        self.random_state = random_state
 
         self.loss = nn.BCEWithLogitsLoss() if classif else nn.MSELoss()
         self.score = Accuracy() if classif else R2Score()
 
         self._check_attributes()
+
+        seed_everything(self.random_state, workers=True)
 
         # NeuMiss block
         # -------------
@@ -317,7 +322,8 @@ class BaseNeuMiss(BaseEstimator, NeuMiss):
                  mlp_depth=0, width_factor=1, init_type='normal',
                  add_mask=False, Sigma=None, mu=None, beta=None,
                  beta0=None, L=None, tmu=None, tsigma=None,
-                 coefs=None, optimizer='adam', lr=1e-3, weight_decay=1e-4):
+                 coefs=None, optimizer='adam', lr=1e-3, weight_decay=1e-4,
+                 random_state=None):
         """The NeuMiss neural network.
 
         Parameters
@@ -389,17 +395,23 @@ class BaseNeuMiss(BaseEstimator, NeuMiss):
                          optimizer=optimizer,
                          lr=lr,
                          weight_decay=weight_decay,
-                         classif=classif)
+                         classif=classif,
+                         random_state=random_state,
+                         )
 
     def fit(self, X, y, percent_val=0.1):
         dataset = TensorDataset(torch.from_numpy(X), torch.from_numpy(y))
         return self.fit_from_dataset(dataset, percent_val=percent_val)
 
     def fit_from_dataset(self, dataset, percent_val=0.1):
+        # Seed for reproducibility
+        seed_everything(self.random_state, workers=True)
+
         n_val = int(percent_val*len(dataset))
         n_train = len(dataset) - n_val
         ds_train, ds_val = random_split(dataset, [n_train, n_val])
-        train_loader = DataLoader(ds_train, batch_size=self.batch_size)
+        train_loader = DataLoader(ds_train, batch_size=self.batch_size,
+                                  shuffle=True)
         val_loader = DataLoader(ds_val, batch_size=self.batch_size)
 
         lr_monitor_callback = LearningRateMonitor(logging_interval='step')
@@ -409,8 +421,8 @@ class BaseNeuMiss(BaseEstimator, NeuMiss):
         if self.early_stopping:
             callbacks.append(early_stop_callback)
 
-        trainer = pl.Trainer(deterministic=True, max_epochs=self.max_epochs, callbacks=callbacks)
-        # trainer = pl.Trainer(gpus=0, precision=16, limit_train_batches=0.5, deterministic=True)
+        trainer = pl.Trainer(deterministic=True, max_epochs=self.max_epochs,
+                             callbacks=callbacks)
         trainer.fit(self, train_loader, val_loader)
 
         return self
@@ -425,7 +437,8 @@ class NeuMissRegressor(BaseNeuMiss):
                  mlp_depth=0, width_factor=1, init_type='normal',
                  add_mask=False, Sigma=None, mu=None, beta=None,
                  beta0=None, L=None, tmu=None, tsigma=None,
-                 coefs=None, optimizer='adam', lr=1e-3, weight_decay=1e-4):
+                 coefs=None, optimizer='adam', lr=1e-3, weight_decay=1e-4,
+                 random_state=0):
         super().__init__(n_features=n_features,
                          mode=mode,
                          depth=depth,
@@ -448,7 +461,9 @@ class NeuMissRegressor(BaseNeuMiss):
                          optimizer=optimizer,
                          lr=lr,
                          weight_decay=weight_decay,
-                         classif=False)
+                         classif=False,
+                         random_state=random_state,
+                         )
 
 
 class NeuMissClassifier(BaseNeuMiss):
@@ -460,7 +475,8 @@ class NeuMissClassifier(BaseNeuMiss):
                  mlp_depth=0, width_factor=1, init_type='normal',
                  add_mask=False, Sigma=None, mu=None, beta=None,
                  beta0=None, L=None, tmu=None, tsigma=None,
-                 coefs=None, optimizer='adam', lr=1e-3, weight_decay=1e-4):
+                 coefs=None, optimizer='adam', lr=1e-3, weight_decay=1e-4,
+                 random_state=0):
         self.max_epochs = max_epochs
         self.batch_size = batch_size
         self.early_stopping = early_stopping
@@ -483,5 +499,7 @@ class NeuMissClassifier(BaseNeuMiss):
                          optimizer=optimizer,
                          lr=lr,
                          weight_decay=weight_decay,
-                         classif=True)
+                         classif=True,
+                         random_state=random_state,
+                         )
 
