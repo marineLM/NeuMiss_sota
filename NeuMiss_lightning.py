@@ -6,6 +6,7 @@ from sklearn.base import BaseEstimator
 
 import torch.nn as nn
 import torch
+from torchmetrics import Accuracy, R2Score
 from torch.nn.modules.loss import BCELoss
 import torch.optim as optim
 from torch.optim.lr_scheduler import ReduceLROnPlateau
@@ -36,6 +37,7 @@ class Neumiss(pl.LightningModule):
         self.classif = classif
 
         self.loss = nn.BCEWithLogitsLoss() if classif else nn.MSELoss()
+        self.score = Accuracy() if classif else R2Score()
 
         self._check_attributes()
 
@@ -283,7 +285,9 @@ class Neumiss(pl.LightningModule):
         m = torch.isnan(x)
         y_hat = self(x, m)
         loss = self.loss(y_hat, y.double())
+        score = self.score(y_hat, y)
         self.log('train_loss', loss)
+        self.log('train_score', score)
         return loss
 
     def validation_step(self, val_batch, batch_idx):
@@ -292,5 +296,7 @@ class Neumiss(pl.LightningModule):
         m = torch.isnan(x)
         y_hat = self(x, m)
         loss = self.loss(y_hat, y.double())
-        self.log('val_loss', loss)
+        score = self.score(y_hat, y)
+        self.log('val_loss', loss, prog_bar=True)
+        self.log('val_score', score, prog_bar=True)
         return loss
