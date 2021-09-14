@@ -289,27 +289,28 @@ class NeuMiss(pl.LightningModule):
             'monitor': 'val_loss',
         }
 
-    def training_step(self, train_batch, batch_idx):
-        x, y = train_batch
+    def _step(self, batch, batch_idx, step_name, prog_bar):
+        """Compute loss for one step. For now the step is common to training,
+        validation and testing. But each can have separate code in the
+        functions below."""
+        x, y = batch
         x = torch.nan_to_num(x)
         m = torch.isnan(x)
         y_hat = self(x, m)
         loss = self.loss(y_hat, y.double())
         score = self.score(y_hat, y)
-        self.log('train_loss', loss)
-        self.log('train_score', score)
+        self.log(f'{step_name}_loss', loss, prog_bar=prog_bar)
+        self.log(f'{step_name}_score', score, prog_bar=prog_bar)
         return loss
 
+    def training_step(self, train_batch, batch_idx):
+        return self._step(train_batch, batch_idx, 'train', prog_bar=False)
+
     def validation_step(self, val_batch, batch_idx):
-        x, y = val_batch
-        x = torch.nan_to_num(x)
-        m = torch.isnan(x)
-        y_hat = self(x, m)
-        loss = self.loss(y_hat, y.double())
-        score = self.score(y_hat, y)
-        self.log('val_loss', loss, prog_bar=True)
-        self.log('val_score', score, prog_bar=True)
-        return loss
+        return self._step(val_batch, batch_idx, 'val', prog_bar=True)
+
+    def test_step(self, test_batch, batch_idx):
+        return self._step(test_batch, batch_idx, 'test', prog_bar=True)
 
 
 class BaseNeuMiss(BaseEstimator, NeuMiss):
