@@ -1,7 +1,7 @@
 """Bayes predictors for supervised learning with missing values."""
 from abc import ABC, abstractmethod
 import numpy as np
-import warnings
+from torch.utils.data import DataLoader
 
 from datasets import CompleteDataset, MCARDataset, MNARDataset, get_link_function
 from amputation import Sigmoid, Probit, Square, Stairs
@@ -79,9 +79,11 @@ class BaseBayesPredictor(ABC):
     def predict(self, X):
         pass
 
-    def predict_from_dataset(self, dataset):
-        X = np.atleast_2d([x for x, _ in dataset])
-        return self.predict(X)
+    def predict_from_dataset(self, dataset, batch_size=10000):
+        loader = DataLoader(dataset, batch_size=batch_size,
+                            num_workers=os.cpu_count())
+        y_pred = [self.predict(x) for x, _ in loader]
+        return np.concatenate(y_pred, axis=0)
 
     def is_classif(self):
         return self.link in ['logit', 'probit']
