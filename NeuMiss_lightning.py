@@ -308,6 +308,8 @@ class NeuMiss(pl.LightningModule):
 
 
 class BaseNeuMiss(BaseEstimator, NeuMiss):
+    """The NeuMiss neural network.
+    Use NeuMissRegressor and NeuMissClassifier."""
 
     def __init__(self, n_features, mode, depth, classif, max_epochs=1000,
                  batch_size=100, early_stopping=True,
@@ -316,6 +318,55 @@ class BaseNeuMiss(BaseEstimator, NeuMiss):
                  add_mask=False, Sigma=None, mu=None, beta=None,
                  beta0=None, L=None, tmu=None, tsigma=None,
                  coefs=None, optimizer='adam', lr=1e-3, weight_decay=1e-4):
+        """The NeuMiss neural network.
+
+        Parameters
+        ----------
+        mode : str
+            One of:
+            * 'baseline': The weight matrices for the Neumann iteration are not
+            shared.
+            * 'shared': The weight matrices for the Neumann iteration are shared.
+            * 'shared_accelerated': The weight matrices for the Neumann iterations
+            are shared and one corefficient per residual connection can be learned
+            for acceleration.
+            * 'analytical_MAR_accelerated', 'analytical_GSM_accelerated',
+            'analytical_MAR', 'analytical_GSM': The weights of the Neumann block
+            are set to their ground truth values, only the MLP block is learned.
+            The accelerated version uses the values of coefs passed as arguments
+            while in the non accelerated version, the coefs are set to 1.
+        depth : int
+            The number of Neumann iterations.
+        n_epochs : int
+            The maximum number of epochs.
+        batch_size : int
+        lr : float
+            The learning rate.
+        weight_decay : float
+            The weight decay parameter.
+        early_stopping : boolean
+            If True, early stopping is used based on the validaton set, with a
+            patience of 15 epochs.
+        optimizer : srt
+            One of `sgd`or `adam`.
+        residual_connection : boolean
+            If True, the residual connection of the Neumann network are
+            implemented.
+        mlp_depth : int
+            The depth of the MLP stacked on top of the Neuman iterations.
+        width_factor : int
+            The width of the MLP stacked on top of the NeuMiss layer is calculated
+            as width_factor times n_features.
+        init_type : str
+            The type of initialization for the parameters. Either 'normal',
+            'uniform', or 'custom_normal'. If 'custom_normal', the values provided
+            for the parameter `Sigma`, `mu`, `L` (and `coefs` if accelerated) are
+            used to initialise the Neumann block.
+        add_mask : boolean
+            If True, the mask is concatenated to the output of the NeuMiss block.
+        verbose : boolean
+
+        """
         self.max_epochs = max_epochs
         self.batch_size = batch_size
         self.early_stopping = early_stopping
@@ -366,6 +417,7 @@ class BaseNeuMiss(BaseEstimator, NeuMiss):
 
 
 class NeuMissRegressor(BaseNeuMiss):
+    """NeuMiss regressor."""
 
     def __init__(self, n_features, mode, depth, max_epochs=1000,
                  batch_size=100, early_stopping=True,
@@ -374,12 +426,12 @@ class NeuMissRegressor(BaseNeuMiss):
                  add_mask=False, Sigma=None, mu=None, beta=None,
                  beta0=None, L=None, tmu=None, tsigma=None,
                  coefs=None, optimizer='adam', lr=1e-3, weight_decay=1e-4):
-        self.max_epochs = max_epochs
-        self.batch_size = batch_size
-        self.early_stopping = early_stopping
         super().__init__(n_features=n_features,
                          mode=mode,
                          depth=depth,
+                         max_epochs=max_epochs,
+                         batch_size=batch_size,
+                         early_stopping=early_stopping,
                          residual_connection=residual_connection,
                          mlp_depth=mlp_depth,
                          width_factor=width_factor,
@@ -400,6 +452,7 @@ class NeuMissRegressor(BaseNeuMiss):
 
 
 class NeuMissClassifier(BaseNeuMiss):
+    """NeuMiss classifier."""
 
     def __init__(self, n_features, mode, depth, max_epochs=1000,
                  batch_size=100, early_stopping=True,
