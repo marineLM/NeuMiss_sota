@@ -1,23 +1,16 @@
-'''Implements Neumann with the posibility to do batch learning'''
-import os
+"""Implements NeuMiss with pytorch and pytorch lightning."""
 import math
-import numpy as np
-from sklearn.base import BaseEstimator
-from abc import ABC
+import os
 
-import torch.nn as nn
-import torch
-# from torch.utils.data.dataset import TensorDataset
-from torchmetrics import Accuracy, R2Score
-from torch.nn.modules.loss import BCELoss
-import torch.optim as optim
-from torch.optim.lr_scheduler import ReduceLROnPlateau
-# from pytorchtools import EarlyStopping
 import pytorch_lightning as pl
-from torch.utils.data import TensorDataset, DataLoader, random_split
-from torch import Tensor
-from pytorch_lightning.callbacks import LearningRateMonitor, EarlyStopping
+import torch
+import torch.nn as nn
 from pytorch_lightning import seed_everything
+from pytorch_lightning.callbacks import EarlyStopping, LearningRateMonitor
+from sklearn.base import BaseEstimator
+from torch.optim.lr_scheduler import ReduceLROnPlateau
+from torch.utils.data import DataLoader, TensorDataset, random_split
+from torchmetrics import Accuracy, R2Score
 
 
 class NeuMiss(pl.LightningModule):

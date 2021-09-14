@@ -1,10 +1,13 @@
 """Bayes predictors for supervised learning with missing values."""
+import os
+import warnings
 from abc import ABC, abstractmethod
+
 import numpy as np
 from torch.utils.data import DataLoader
 
-from datasets import CompleteDataset, MCARDataset, MNARDataset, get_link_function
-from amputation import Sigmoid, Probit, Square, Stairs
+from amputation import Probit
+from datasets import get_link_function
 
 
 class BaseBayesPredictor(ABC):
@@ -66,11 +69,6 @@ class BaseBayesPredictor(ABC):
             raise ValueError(f'No probability to compute in regression. '
                              f'Got compute_probas={self.compute_probas} '
                              f'but link={self.link}.')
-
-        # if self.mv_mechanism == 'MNAR' and self.model != 'GSM':
-        #     raise NotImplementedError(
-        #         f'Non-GSM mechanism not supported for MNAR. '
-        #         f'Got "{self.model}"')
 
     def fit(self, X, y):
         return self
