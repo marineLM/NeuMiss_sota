@@ -22,8 +22,8 @@ from pytorch_lightning.callbacks import LearningRateMonitor, EarlyStopping
 class Neumiss(pl.LightningModule):
     def __init__(self, n_features, mode, depth, residual_connection=False,
                  mlp_depth=0, width_factor=1, init_type='normal',
-                 add_mask=False, Sigma_gt=None, mu_gt=None, beta_gt=None,
-                 beta0_gt=None, L_gt=None, tmu_gt=None, tsigma_gt=None,
+                 add_mask=False, Sigma=None, mu=None, beta=None,
+                 beta0=None, L=None, tmu=None, tsigma=None,
                  coefs=None, optimizer='adam', lr=1e-3, weight_decay=1e-4,
                  classif=False):
         super().__init__()
@@ -61,14 +61,14 @@ class Neumiss(pl.LightningModule):
                 Wc = torch.empty(n_features, n_features, dtype=torch.double)
                 mu = torch.empty(n_features, dtype=torch.double)
             else:
-                if Sigma_gt is None or mu_gt is None or L_gt is None:
+                if Sigma is None or mu is None or L is None:
                     raise ValueError('With custom' +
                                      'initialisation, Sigma, mu and L' +
                                      'must be specified.')
-                Sigma_gt = torch.as_tensor(Sigma_gt, dtype=torch.double)
-                W = torch.eye(n_features, dtype=torch.double) - Sigma_gt*2/L_gt
-                Wc = Sigma_gt*2/L_gt
-                mu = torch.as_tensor(mu_gt, dtype=torch.double)
+                Sigma = torch.as_tensor(Sigma, dtype=torch.double)
+                W = torch.eye(n_features, dtype=torch.double) - Sigma*2/L
+                Wc = Sigma*2/L
+                mu = torch.as_tensor(mu, dtype=torch.double)
 
             if self.mlp_depth > 0:
                 beta = torch.empty(width_factor*n_features, dtype=torch.double)
@@ -128,20 +128,20 @@ class Neumiss(pl.LightningModule):
         else:
             # If analytical mode, initialize parameters to their ground truth
             # values
-            if Sigma_gt is None or mu_gt is None or L_gt is None:
+            if Sigma is None or mu is None or L is None:
                 raise ValueError('In analytical mode, Sigma , mu and L' +
                                  'must be specified.')
-            Sigma_gt = torch.as_tensor(Sigma_gt, dtype=torch.double)
+            Sigma = torch.as_tensor(Sigma, dtype=torch.double)
             if 'accelerated' in self.mode:
                 self.W = torch.eye(
-                    n_features, dtype=torch.double) - Sigma_gt*1/L_gt
-                self.Wc = Sigma_gt
+                    n_features, dtype=torch.double) - Sigma*1/L
+                self.Wc = Sigma
             else:
                 self.W = torch.eye(
-                    n_features, dtype=torch.double) - Sigma_gt*2/L_gt
-                self.Wc = Sigma_gt*2/L_gt
+                    n_features, dtype=torch.double) - Sigma*2/L
+                self.Wc = Sigma*2/L
 
-            self.mu = torch.as_tensor(mu_gt, dtype=torch.double)
+            self.mu = torch.as_tensor(mu, dtype=torch.double)
 
             # if self.mlp_depth > 0:
             beta = torch.empty(1*n_features, dtype=torch.double)
@@ -156,19 +156,19 @@ class Neumiss(pl.LightningModule):
             self.beta = torch.nn.Parameter(beta)
             self.b = torch.nn.Parameter(b)
             # else:
-            #     if beta_gt is None or beta0_gt is None:
+            #     if beta is None or beta0 is None:
             #         raise ValueError('In analytical mode, beta and beta0' +
             #                          'must be specified.')
-            #     self.beta = torch.as_tensor(beta_gt, dtype=torch.double)
-            #     self.b = torch.as_tensor(beta0_gt, dtype=torch.double)
+            #     self.beta = torch.as_tensor(beta, dtype=torch.double)
+            #     self.b = torch.as_tensor(beta0, dtype=torch.double)
 
             if 'GSM' in self.mode:
-                if (tsigma_gt is None or tmu_gt is None):
+                if (tsigma is None or tmu is None):
                     raise ValueError('In GSM analytical mode, tsigma and tmu' +
                                      'must be specified')
-                self.tmu = torch.as_tensor(tmu_gt, dtype=torch.double)
-                self.tsigma = torch.as_tensor(tsigma_gt, dtype=torch.double)
-                self.Sigma = torch.as_tensor(Sigma_gt, dtype=torch.double)
+                self.tmu = torch.as_tensor(tmu, dtype=torch.double)
+                self.tsigma = torch.as_tensor(tsigma, dtype=torch.double)
+                self.Sigma = torch.as_tensor(Sigma, dtype=torch.double)
                 # alpha = torch.empty(1, dtype=torch.double) # for analytical GSM
                 # nn.init.normal_(alpha)
                 # self.alpha = torch.nn.Parameter(alpha)
@@ -313,8 +313,8 @@ class _NeuMissEstimator(BaseEstimator, Neumiss):
                  batch_size=100, early_stopping=True,
                  residual_connection=False,
                  mlp_depth=0, width_factor=1, init_type='normal',
-                 add_mask=False, Sigma_gt=None, mu_gt=None, beta_gt=None,
-                 beta0_gt=None, L_gt=None, tmu_gt=None, tsigma_gt=None,
+                 add_mask=False, Sigma=None, mu=None, beta=None,
+                 beta0=None, L=None, tmu=None, tsigma=None,
                  coefs=None, optimizer='adam', lr=1e-3, weight_decay=1e-4):
         self.max_epochs = max_epochs
         self.batch_size = batch_size
@@ -327,13 +327,13 @@ class _NeuMissEstimator(BaseEstimator, Neumiss):
                          width_factor=width_factor,
                          init_type=init_type,
                          add_mask=add_mask,
-                         Sigma_gt=Sigma_gt,
-                         mu_gt=mu_gt,
-                         beta_gt=beta_gt,
-                         beta0_gt=beta0_gt,
-                         L_gt=L_gt,
-                         tmu_gt=tmu_gt,
-                         tsigma_gt=tsigma_gt,
+                         Sigma=Sigma,
+                         mu=mu,
+                         beta=beta,
+                         beta0=beta0,
+                         L=L,
+                         tmu=tmu,
+                         tsigma=tsigma,
                          coefs=coefs,
                          optimizer=optimizer,
                          lr=lr,
@@ -371,8 +371,8 @@ class NeuMissRegressor(_NeuMissEstimator):
                  batch_size=100, early_stopping=True,
                  residual_connection=False,
                  mlp_depth=0, width_factor=1, init_type='normal',
-                 add_mask=False, Sigma_gt=None, mu_gt=None, beta_gt=None,
-                 beta0_gt=None, L_gt=None, tmu_gt=None, tsigma_gt=None,
+                 add_mask=False, Sigma=None, mu=None, beta=None,
+                 beta0=None, L=None, tmu=None, tsigma=None,
                  coefs=None, optimizer='adam', lr=1e-3, weight_decay=1e-4):
         self.max_epochs = max_epochs
         self.batch_size = batch_size
@@ -385,13 +385,13 @@ class NeuMissRegressor(_NeuMissEstimator):
                          width_factor=width_factor,
                          init_type=init_type,
                          add_mask=add_mask,
-                         Sigma_gt=Sigma_gt,
-                         mu_gt=mu_gt,
-                         beta_gt=beta_gt,
-                         beta0_gt=beta0_gt,
-                         L_gt=L_gt,
-                         tmu_gt=tmu_gt,
-                         tsigma_gt=tsigma_gt,
+                         Sigma=Sigma,
+                         mu=mu,
+                         beta=beta,
+                         beta0=beta0,
+                         L=L,
+                         tmu=tmu,
+                         tsigma=tsigma,
                          coefs=coefs,
                          optimizer=optimizer,
                          lr=lr,
@@ -400,13 +400,75 @@ class NeuMissRegressor(_NeuMissEstimator):
 
 
 class NeuMissClassifier(_NeuMissEstimator):
+        """The Neumiss neural network
+
+    Parameters
+    ----------
+
+    mode: str
+        One of:
+        * 'baseline': The weight matrices for the Neumann iteration are not
+        shared.
+        * 'shared': The weight matrices for the Neumann iteration are shared.
+        * 'shared_accelerated': The weight matrices for the Neumann iterations
+        are shared and one corefficient per residual connection can be learned
+        for acceleration.
+        * 'analytical_MAR_accelerated', 'analytical_GSM_accelerated',
+        'analytical_MAR', 'analytical_GSM': The weights of the Neumann block
+        are set to their ground truth values, only the MLP block is learned.
+        The accelerated version uses the values of coefs passed as arguments
+        while in the non accelerated version, the coefs are set to 1.
+
+    depth: int
+        The number of Neumann iterations.
+
+    n_epochs: int
+        The maximum number of epochs.
+
+    batch_size: int
+
+    lr: float
+        The learning rate.
+
+    weight_decay: float
+        The weight decay parameter.
+
+    early_stopping: boolean
+        If True, early stopping is used based on the validaton set, with a
+        patience of 15 epochs.
+
+    optimizer: srt
+        One of `sgd`or `adam`.
+
+    residual_connection: boolean
+        If True, the residual connection of the Neumann network are
+        implemented.
+
+    mlp_depth: int
+        The depth of the MLP stacked on top of the Neuman iterations.
+
+    width_factor: int
+        The width of the MLP stacked on top of the NeuMiss layer is calculated
+        as width_factor times n_features.
+
+    init_type: str
+        The type of initialisation for the parameters. Either 'normal',
+        'uniform', or 'custom_normal'. If 'custom_normal', the values provided
+        for the parameter `Sigma`, `mu`, `L` (and `coefs` if accelerated) are
+        used to initialise the Neumann block.
+
+    add_mask: boolean
+        If True, the mask is concatenated to the output of the NeuMiss block.
+
+    verbose: boolean
+    """
 
     def __init__(self, n_features, mode, depth, max_epochs=1000,
                  batch_size=100, early_stopping=True,
                  residual_connection=False,
                  mlp_depth=0, width_factor=1, init_type='normal',
-                 add_mask=False, Sigma_gt=None, mu_gt=None, beta_gt=None,
-                 beta0_gt=None, L_gt=None, tmu_gt=None, tsigma_gt=None,
+                 add_mask=False, Sigma=None, mu=None, beta=None,
+                 beta0=None, L=None, tmu=None, tsigma=None,
                  coefs=None, optimizer='adam', lr=1e-3, weight_decay=1e-4):
         self.max_epochs = max_epochs
         self.batch_size = batch_size
@@ -419,13 +481,13 @@ class NeuMissClassifier(_NeuMissEstimator):
                          width_factor=width_factor,
                          init_type=init_type,
                          add_mask=add_mask,
-                         Sigma_gt=Sigma_gt,
-                         mu_gt=mu_gt,
-                         beta_gt=beta_gt,
-                         beta0_gt=beta0_gt,
-                         L_gt=L_gt,
-                         tmu_gt=tmu_gt,
-                         tsigma_gt=tsigma_gt,
+                         Sigma=Sigma,
+                         mu=mu,
+                         beta=beta,
+                         beta0=beta0,
+                         L=L,
+                         tmu=tmu,
+                         tsigma=tsigma,
                          coefs=coefs,
                          optimizer=optimizer,
                          lr=lr,
