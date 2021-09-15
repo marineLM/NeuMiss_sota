@@ -19,6 +19,7 @@ class NeuMiss(pl.LightningModule):
                  add_mask=False, Sigma=None, mu=None, beta=None,
                  beta0=None, L=None, tmu=None, tsigma=None,
                  coefs=None, optimizer='adam', lr=1e-3, weight_decay=1e-4,
+                 sched_factor=0.2, sched_patience=10, sched_threshold=1e-4,
                  classif=False, random_state=0):
         super().__init__()
         self.n_features = n_features
@@ -33,6 +34,9 @@ class NeuMiss(pl.LightningModule):
         self.optimizer = optimizer
         self.lr = lr
         self.weight_decay = weight_decay
+        self.sched_factor = sched_factor
+        self.sched_patience = sched_patience
+        self.sched_threshold = sched_threshold
         self.classif = classif
         self.random_state = random_state
 
@@ -272,8 +276,9 @@ class NeuMiss(pl.LightningModule):
             optimizer = torch.optim.SGD(self.parameters(), lr=self.lr,
                                         weight_decay=self.weight_decay)
 
-        scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.2,
-                                      patience=10, threshold=1e-4)
+        scheduler = ReduceLROnPlateau(
+            optimizer, mode='min', factor=self.sched_factor,
+            patience=self.sched_patience, threshold=self.sched_threshold)
 
         return {
             'optimizer': optimizer,
@@ -316,6 +321,7 @@ class BaseNeuMiss(BaseEstimator, NeuMiss):
                  add_mask=False, Sigma=None, mu=None, beta=None,
                  beta0=None, L=None, tmu=None, tsigma=None,
                  coefs=None, optimizer='adam', lr=1e-3, weight_decay=1e-4,
+                 sched_factor=0.2, sched_patience=10, sched_threshold=1e-4,
                  random_state=None):
         """The NeuMiss neural network.
 
@@ -389,6 +395,9 @@ class BaseNeuMiss(BaseEstimator, NeuMiss):
                          optimizer=optimizer,
                          lr=lr,
                          weight_decay=weight_decay,
+                         sched_factor=sched_factor,
+                         sched_patience=sched_patience,
+                         sched_threshold=sched_threshold,
                          classif=classif,
                          random_state=random_state,
                          )
@@ -448,6 +457,7 @@ class NeuMissRegressor(BaseNeuMiss):
                  add_mask=False, Sigma=None, mu=None, beta=None,
                  beta0=None, L=None, tmu=None, tsigma=None,
                  coefs=None, optimizer='adam', lr=1e-3, weight_decay=1e-4,
+                 sched_factor=0.2, sched_patience=10, sched_threshold=1e-4,
                  random_state=0):
         super().__init__(n_features=n_features,
                          mode=mode,
@@ -471,6 +481,9 @@ class NeuMissRegressor(BaseNeuMiss):
                          optimizer=optimizer,
                          lr=lr,
                          weight_decay=weight_decay,
+                         sched_factor=sched_factor,
+                         sched_patience=sched_patience,
+                         sched_threshold=sched_threshold,
                          classif=False,
                          random_state=random_state,
                          )
@@ -486,6 +499,7 @@ class NeuMissClassifier(BaseNeuMiss):
                  add_mask=False, Sigma=None, mu=None, beta=None,
                  beta0=None, L=None, tmu=None, tsigma=None,
                  coefs=None, optimizer='adam', lr=1e-3, weight_decay=1e-4,
+                 sched_factor=0.2, sched_patience=10, sched_threshold=1e-4,
                  random_state=0):
         super().__init__(n_features=n_features,
                          mode=mode,
@@ -509,7 +523,9 @@ class NeuMissClassifier(BaseNeuMiss):
                          optimizer=optimizer,
                          lr=lr,
                          weight_decay=weight_decay,
+                         sched_factor=sched_factor,
+                         sched_patience=sched_patience,
+                         sched_threshold=sched_threshold,
                          classif=True,
                          random_state=random_state,
                          )
-
