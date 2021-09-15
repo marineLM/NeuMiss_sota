@@ -2,6 +2,8 @@
 from abc import ABC, abstractmethod
 
 import torch
+from torch._utils import _accumulate
+from torch import randperm
 import numpy as np
 from sklearn.utils import check_random_state
 from torch.utils.data import TensorDataset
@@ -14,7 +16,7 @@ class BaseDataset(ABC, TensorDataset):
     """Abstract dataset class."""
 
     def __init__(self, n_samples, mean, cov, link, beta, curvature=None,
-                 snr=None, X_model='gaussian', random_state=None) -> None:
+                 snr=None, X_model='gaussian', random_state=None, _data=None):
         """
         Parameters
         ----------
@@ -37,6 +39,8 @@ class BaseDataset(ABC, TensorDataset):
             The model to use to generate the data X.
             'gaussian' for Gaussian data.
         random_state : int
+        _data : tuple (X, y)
+            To set the X and y variables.
         """
         self.n_samples = n_samples
         self.X_model = X_model
@@ -52,15 +56,20 @@ class BaseDataset(ABC, TensorDataset):
         self._check_attributes()
         self.rng = check_random_state(random_state)
 
-        # Generate data
-        self.X = self._generate_X()
+        if _data is None:
+            # Generate data
+            self.X = self._generate_X()
 
-        # Generate outcome from data
-        self.y = self._generate_y(self.X)
+            # Generate outcome from data
+            self.y = self._generate_y(self.X)
 
-        # Generate missing values in the data
-        self.M = self._generate_mask()
-        np.putmask(self.X, self.M, np.nan)
+            # Generate missing values in the data
+            self.M = self._generate_mask()
+            np.putmask(self.X, self.M, np.nan)
+
+        else:
+            self.X, self.y = _data
+            self.M = np.isnan(self.X)
 
         # Create a TensorDataset
         super().__init__(torch.from_numpy(self.X), torch.from_numpy(self.y))
@@ -113,6 +122,26 @@ class BaseDataset(ABC, TensorDataset):
             y += noise
 
         return y
+
+    def random_split(self, lengths, random_state):
+        """Split dataset in datasets of same class, based on random_split of
+        PyTorch."""
+        if sum(lengths) != len(self):  # type: ignore[arg-type]
+            raise ValueError("Sum of input lengths does not equal the length of the input dataset!")
+
+        generator = torch.Generator().manual_seed(random_state)
+        indices = randperm(sum(lengths), generator=generator).tolist()
+
+        def new_dataset(indices):
+            X = self.X[indices, :]
+            y = self.y[indices]
+            params = self.get_data_params()
+            params.pop('mv_mechanism', None)
+            params['n_samples'] = len(indices)
+            return self.__class__(**params, _data=(X, y))
+
+        return [new_dataset(indices[offset - length:offset]) for
+                (offset, length) in zip(_accumulate(lengths), lengths)]
 
     def is_classif(self):
         return self.link in ['logit', 'probit']
