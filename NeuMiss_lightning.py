@@ -43,6 +43,8 @@ class NeuMiss(pl.LightningModule):
         self.loss = nn.BCEWithLogitsLoss() if classif else nn.MSELoss()
         self.score = Accuracy() if classif else R2Score()
 
+        self.optimizer_object = None
+
         self._check_attributes()
 
         seed_everything(self.random_state, workers=True)
@@ -280,6 +282,8 @@ class NeuMiss(pl.LightningModule):
             optimizer, mode='min', factor=self.sched_factor,
             patience=self.sched_patience, threshold=self.sched_threshold)
 
+        self.optimizer_object = optimizer
+
         return {
             'optimizer': optimizer,
             'lr_scheduler':  scheduler,
@@ -301,6 +305,7 @@ class NeuMiss(pl.LightningModule):
         return loss
 
     def training_step(self, train_batch, batch_idx):
+        self.log('lr', self.optimizer_object.param_groups[0]['lr'])
         return self._step(train_batch, batch_idx, 'train', prog_bar=False)
 
     def validation_step(self, val_batch, batch_idx):
@@ -322,7 +327,7 @@ class BaseNeuMiss(BaseEstimator, NeuMiss):
                  beta0=None, L=None, tmu=None, tsigma=None,
                  coefs=None, optimizer='adam', lr=1e-3, weight_decay=1e-4,
                  sched_factor=0.2, sched_patience=10, sched_threshold=1e-4,
-                 random_state=None):
+                 stopping_lr=1e-4, random_state=None):
         """The NeuMiss neural network.
 
         Parameters
@@ -375,6 +380,7 @@ class BaseNeuMiss(BaseEstimator, NeuMiss):
         self.max_epochs = max_epochs
         self.batch_size = batch_size
         self.early_stopping = early_stopping
+        self.stopping_lr = stopping_lr
         self.trainer = None
         super().__init__(n_features=n_features,
                          mode=mode,
@@ -425,9 +431,15 @@ class BaseNeuMiss(BaseEstimator, NeuMiss):
         lr_monitor_callback = LearningRateMonitor(logging_interval='step')
         callbacks = [lr_monitor_callback]
 
-        early_stop_callback = EarlyStopping(monitor='val_loss')
         if self.early_stopping:
+            early_stop_callback = EarlyStopping(monitor='val_loss')
             callbacks.append(early_stop_callback)
+
+        if self.stopping_lr is not None:
+            stopping_lr_callback = EarlyStopping(
+                monitor='lr', stopping_threshold=self.stopping_lr,
+                patience=self.max_epochs)
+            callbacks.append(stopping_lr_callback)
 
         trainer = pl.Trainer(deterministic=True, max_epochs=self.max_epochs,
                              callbacks=callbacks)
@@ -458,6 +470,7 @@ class NeuMissRegressor(BaseNeuMiss):
                  beta0=None, L=None, tmu=None, tsigma=None,
                  coefs=None, optimizer='adam', lr=1e-3, weight_decay=1e-4,
                  sched_factor=0.2, sched_patience=10, sched_threshold=1e-4,
+                 stopping_lr=1e-4,
                  random_state=0):
         super().__init__(n_features=n_features,
                          mode=mode,
@@ -484,6 +497,7 @@ class NeuMissRegressor(BaseNeuMiss):
                          sched_factor=sched_factor,
                          sched_patience=sched_patience,
                          sched_threshold=sched_threshold,
+                         stopping_lr=stopping_lr,
                          classif=False,
                          random_state=random_state,
                          )
@@ -500,6 +514,7 @@ class NeuMissClassifier(BaseNeuMiss):
                  beta0=None, L=None, tmu=None, tsigma=None,
                  coefs=None, optimizer='adam', lr=1e-3, weight_decay=1e-4,
                  sched_factor=0.2, sched_patience=10, sched_threshold=1e-4,
+                 stopping_lr=1e-4,
                  random_state=0):
         super().__init__(n_features=n_features,
                          mode=mode,
@@ -526,6 +541,7 @@ class NeuMissClassifier(BaseNeuMiss):
                          sched_factor=sched_factor,
                          sched_patience=sched_patience,
                          sched_threshold=sched_threshold,
+                         stopping_lr=stopping_lr,
                          classif=True,
                          random_state=random_state,
                          )
