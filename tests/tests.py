@@ -2,7 +2,7 @@ import unittest
 import numpy as np
 from scipy.stats import norm
 
-from bayes_predictors import MARBayesPredictor
+from neumiss import MARBayesPredictor
 
 
 class TestMARBayes(unittest.TestCase):

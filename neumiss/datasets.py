@@ -8,8 +8,8 @@ import numpy as np
 from sklearn.utils import check_random_state
 from torch.utils.data import TensorDataset
 
-from amputation import (MCAR, MNAR_GSM, MNAR_PSM, MAR_logistic, MNAR_logistic,
-                        MNAR_logistic_uniform, Probit, Sigmoid, Square, Stairs)
+from .amputation import (MCAR, MNAR_GSM, MNAR_PSM, MAR_logistic, MNAR_logistic,
+                         MNAR_logistic_uniform, Probit, Sigmoid, Square, Stairs)
 
 
 class BaseDataset(ABC, TensorDataset):

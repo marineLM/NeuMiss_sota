@@ -6,8 +6,8 @@ from abc import ABC, abstractmethod
 import numpy as np
 from torch.utils.data import DataLoader
 
-from amputation import Probit
-from datasets import get_link_function
+from .amputation import Probit
+from .datasets import get_link_function
 
 
 class BaseBayesPredictor(ABC):

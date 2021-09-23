@@ -2,7 +2,7 @@
 import numpy as np
 from torch.utils.data import DataLoader, Subset, random_split
 
-from datasets import CompleteDataset, MARDataset, MCARDataset, MNARDataset
+from neumiss import CompleteDataset, MARDataset, MCARDataset, MNARDataset
 
 # Size of data
 n = 10  # samples
