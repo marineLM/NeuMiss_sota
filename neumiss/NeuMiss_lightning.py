@@ -424,9 +424,9 @@ class BaseNeuMiss(BaseEstimator, NeuMiss):
         n_train = len(dataset) - n_val
         ds_train, ds_val = random_split(dataset, [n_train, n_val])
         train_loader = DataLoader(ds_train, batch_size=self.batch_size,
-                                  shuffle=True, num_workers=os.cpu_count())
+                                  shuffle=True, num_workers=8)
         val_loader = DataLoader(ds_val, batch_size=self.batch_size,
-                                num_workers=os.cpu_count())
+                                num_workers=8)
 
         lr_monitor_callback = LearningRateMonitor(logging_interval='step')
         callbacks = [lr_monitor_callback]
