@@ -1,6 +1,5 @@
 """Implements NeuMiss with pytorch and pytorch lightning."""
 import math
-import os
 
 import pytorch_lightning as pl
 import torch
@@ -314,6 +313,25 @@ class NeuMiss(pl.LightningModule):
     def test_step(self, test_batch, batch_idx):
         return self._step(test_batch, batch_idx, 'test', prog_bar=True)
 
+    def get_params(self):
+        return {
+            'n_features': self.n_features,
+            'mode': self.mode,
+            'depth': self.depth,
+            'residual_connection': self.residual_connection,
+            'mlp_depth': self.mlp_depth,
+            'width_factor': self.width_factor,
+            'add_mask': self.add_mask,
+            'optimizer': self.optimizer,
+            'lr': self.lr,
+            'weight_decay': self.weight_decay,
+            'sched_factor': self.sched_factor,
+            'sched_patience': self.sched_patience,
+            'sched_threshold': self.sched_threshold,
+            'classif': self.classif,
+            'random_state': self.random_state,
+        }
+
 
 class BaseNeuMiss(BaseEstimator, NeuMiss):
     """The NeuMiss neural network.
@@ -327,7 +345,7 @@ class BaseNeuMiss(BaseEstimator, NeuMiss):
                  beta0=None, L=None, tmu=None, tsigma=None,
                  coefs=None, optimizer='adam', lr=1e-3, weight_decay=1e-4,
                  sched_factor=0.2, sched_patience=10, sched_threshold=1e-4,
-                 stopping_lr=1e-4, random_state=None):
+                 stopping_lr=1e-4, random_state=None, logger=True):
         """The NeuMiss neural network.
 
         Parameters
@@ -382,6 +400,7 @@ class BaseNeuMiss(BaseEstimator, NeuMiss):
         self.early_stopping = early_stopping
         self.stopping_lr = stopping_lr
         self.trainer = None
+        self.trainer_logger = logger
         super().__init__(n_features=n_features,
                          mode=mode,
                          depth=depth,
@@ -424,9 +443,11 @@ class BaseNeuMiss(BaseEstimator, NeuMiss):
         n_train = len(dataset) - n_val
         ds_train, ds_val = random_split(dataset, [n_train, n_val])
         train_loader = DataLoader(ds_train, batch_size=self.batch_size,
-                                  shuffle=True, num_workers=8)
+                                  shuffle=True, num_workers=8,
+                                  multiprocessing_context='fork')
         val_loader = DataLoader(ds_val, batch_size=self.batch_size,
-                                num_workers=8)
+                                num_workers=8,
+                                multiprocessing_context='fork')
 
         lr_monitor_callback = LearningRateMonitor(logging_interval='step')
         callbacks = [lr_monitor_callback]
@@ -442,7 +463,7 @@ class BaseNeuMiss(BaseEstimator, NeuMiss):
             callbacks.append(stopping_lr_callback)
 
         trainer = pl.Trainer(deterministic=True, max_epochs=self.max_epochs,
-                             callbacks=callbacks)
+                             callbacks=callbacks, logger=self.trainer_logger)
         trainer.fit(self, train_loader, val_loader)
         self.trainer = trainer
 
@@ -453,10 +474,21 @@ class BaseNeuMiss(BaseEstimator, NeuMiss):
         return self.test_from_dataset(dataset, ckpt_path=ckpt_path)
 
     def test_from_dataset(self, dataset, ckpt_path='best'):
-        test_loader = DataLoader(dataset, batch_size=self.batch_size)
+        test_loader = DataLoader(dataset, batch_size=self.batch_size,
+                                 num_workers=8,
+                                 multiprocessing_context='fork')
 
         trainer = pl.Trainer() if self.trainer is None else self.trainer
         return trainer.test(self, test_loader, ckpt_path=ckpt_path)
+
+    def get_params(self):
+        return dict(**super().get_params(), **{
+            'max_epochs': self.max_epochs,
+            'batch_size': self.batch_size,
+            'early_stopping': self.early_stopping,
+            'stopping_lr': self.stopping_lr,
+            'trainer_logger': self.logger,
+        })
 
 
 class NeuMissRegressor(BaseNeuMiss):
@@ -471,7 +503,7 @@ class NeuMissRegressor(BaseNeuMiss):
                  coefs=None, optimizer='adam', lr=1e-3, weight_decay=1e-4,
                  sched_factor=0.2, sched_patience=10, sched_threshold=1e-4,
                  stopping_lr=1e-4,
-                 random_state=0):
+                 random_state=0, logger=True):
         super().__init__(n_features=n_features,
                          mode=mode,
                          depth=depth,
@@ -500,6 +532,7 @@ class NeuMissRegressor(BaseNeuMiss):
                          stopping_lr=stopping_lr,
                          classif=False,
                          random_state=random_state,
+                         logger=logger,
                          )
 
 
@@ -515,7 +548,7 @@ class NeuMissClassifier(BaseNeuMiss):
                  coefs=None, optimizer='adam', lr=1e-3, weight_decay=1e-4,
                  sched_factor=0.2, sched_patience=10, sched_threshold=1e-4,
                  stopping_lr=1e-4,
-                 random_state=0):
+                 random_state=0, logger=True):
         super().__init__(n_features=n_features,
                          mode=mode,
                          depth=depth,
@@ -544,4 +577,5 @@ class NeuMissClassifier(BaseNeuMiss):
                          stopping_lr=stopping_lr,
                          classif=True,
                          random_state=random_state,
+                         logger=logger,
                          )

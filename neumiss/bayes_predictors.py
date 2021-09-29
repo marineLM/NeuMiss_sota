@@ -79,7 +79,8 @@ class BaseBayesPredictor(ABC):
 
     def predict_from_dataset(self, dataset, batch_size=10000):
         loader = DataLoader(dataset, batch_size=batch_size,
-                            num_workers=os.cpu_count())
+                            num_workers=8,
+                            multiprocessing_context='fork')
         y_pred = [self.predict(x) for x, _ in loader]
         return np.concatenate(y_pred, axis=0)
 
