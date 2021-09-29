@@ -182,7 +182,20 @@ class CompleteDataset(BaseDataset):
 class MCARDataset(BaseDataset):
     """Generate a dataset with MCAR missing values."""
 
-    def __init__(self, *args, missing_rate, **kwargs) -> None:
+    def __init__(
+        self,
+        n_samples,
+        mean,
+        cov,
+        link,
+        beta,
+        missing_rate,
+        curvature=None,
+        snr=None,
+        X_model='gaussian',
+        random_state=None,
+        _data=None
+    ):
         """
         Parameters
         ----------
@@ -191,7 +204,18 @@ class MCARDataset(BaseDataset):
             have missing values.
         """
         self.missing_rate = missing_rate
-        super().__init__(*args, **kwargs)
+        super().__init__(
+            n_samples=n_samples,
+            mean=mean,
+            cov=cov,
+            link=link,
+            beta=beta,
+            curvature=curvature,
+            snr=snr,
+            X_model=X_model,
+            random_state=random_state,
+            _data=_data,
+        )
 
     def _generate_mask(self):
         return MCAR(self.X, self.missing_rate, self.rng)
@@ -206,8 +230,22 @@ class MCARDataset(BaseDataset):
 class MARDataset(BaseDataset):
     """Generate a dataset with MAR missing values."""
 
-    def __init__(self, *args, missing_rate, p_obs, model='logistic',
-                 **kwargs) -> None:
+    def __init__(
+            self,
+            n_samples,
+            mean,
+            cov,
+            link,
+            beta,
+            missing_rate,
+            p_obs,
+            model='logistic',
+            curvature=None,
+            snr=None,
+            X_model='gaussian',
+            random_state=None,
+            _data=None,
+    ):
         """
         Parameters
         ----------
@@ -223,7 +261,18 @@ class MARDataset(BaseDataset):
         self.missing_rate = missing_rate
         self.p_obs = p_obs
         self.model = model
-        super().__init__(*args, **kwargs)
+        super().__init__(
+            n_samples=n_samples,
+            mean=mean,
+            cov=cov,
+            link=link,
+            beta=beta,
+            curvature=curvature,
+            snr=snr,
+            X_model=X_model,
+            random_state=random_state,
+            _data=_data,
+        )
 
     def _check_attributes(self):
         available_models = ['logistic']
@@ -249,9 +298,26 @@ class MARDataset(BaseDataset):
 class MNARDataset(BaseDataset):
     """Generate a dataset with MNAR missing values."""
 
-    def __init__(self, *args, missing_rate=None, p_params=None,
-                 model='logistic', k=None, sigma2_tilde=None, lbd=None, c=None,
-                 **kwargs):
+    def __init__(
+            self,
+            n_samples,
+            mean,
+            cov,
+            link,
+            beta,
+            missing_rate=None,
+            p_params=None,
+            model='logistic',
+            k=None,
+            sigma2_tilde=None,
+            lbd=None,
+            c=None,
+            curvature=None,
+            snr=None,
+            X_model='gaussian',
+            random_state=None,
+            _data=None,
+    ):
         """
         Parameters
         ----------
@@ -280,7 +346,18 @@ class MNARDataset(BaseDataset):
         self.sigma2_tilde = sigma2_tilde
         self.lbd = lbd
         self.c = c
-        super().__init__(*args, **kwargs)
+        super().__init__(
+            n_samples=n_samples,
+            mean=mean,
+            cov=cov,
+            link=link,
+            beta=beta,
+            curvature=curvature,
+            snr=snr,
+            X_model=X_model,
+            random_state=random_state,
+            _data=_data,
+        )
 
     def _check_attributes(self):
         available_models = ['logistic', 'logistic_uniform', 'GSM', 'PSM']
