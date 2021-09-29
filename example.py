@@ -55,12 +55,12 @@ for n_size in n_sizes:
     print(f'Subdataset size: {len(sub_ds)}')
 
 # Split a dataset into train, val and test sets
-train_ds, val_ds, test_ds = random_split(ds, [5, 3, 2])
+train_ds, val_ds, test_ds = ds.random_split([5, 3, 2], random_state=0)
 
 # Use dataloaders
-train_loader = DataLoader(train_ds, batch_size=2, shuffle=True)
-val_loader = DataLoader(val_ds, batch_size=2, shuffle=True)
-test_loader = DataLoader(test_ds, batch_size=2, shuffle=True)
+train_loader = DataLoader(train_ds, batch_size=2, shuffle=False)
+val_loader = DataLoader(val_ds, batch_size=2, shuffle=False)
+test_loader = DataLoader(test_ds, batch_size=2, shuffle=False)
 
 # Iterate over dataloaders
 for train_features, train_labels in train_loader:
