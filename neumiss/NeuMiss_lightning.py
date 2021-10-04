@@ -308,8 +308,8 @@ class NeuMiss(pl.LightningModule):
         validation and testing. But each can have separate code in the
         functions below."""
         x, y = batch
-        x = torch.nan_to_num(x)
         m = torch.isnan(x)
+        x = torch.nan_to_num(x)
         y_hat = self(x, m)
         loss = self.loss(y_hat, y.double())
         score = self.score(y_hat, y)
