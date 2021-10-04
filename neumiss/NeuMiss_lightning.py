@@ -19,7 +19,7 @@ class NeuMiss(pl.LightningModule):
                  beta0=None, L=None, tmu=None, tsigma=None,
                  coefs=None, optimizer='adam', lr=1e-3, weight_decay=1e-4,
                  sched_factor=0.2, sched_patience=10, sched_threshold=1e-4,
-                 classif=False, random_state=0):
+                 classif=False, classif_loss='bce', random_state=0):
         super().__init__()
         self.n_features = n_features
         self.mode = mode
@@ -39,7 +39,21 @@ class NeuMiss(pl.LightningModule):
         self.classif = classif
         self.random_state = random_state
 
-        self.loss = nn.BCEWithLogitsLoss() if classif else nn.MSELoss()
+        self.classif_loss = classif_loss
+        if classif_loss == 'bce':
+            classif_loss = nn.BCEWithLogitsLoss()
+
+        elif classif_loss == 'hinge':
+            def hinge(x, y, margin=1):
+                y[y == 0] = -1
+                return nn.MarginRankingLoss(margin)(x, torch.zeros_like(x), y)
+
+            classif_loss = hinge
+
+        else:
+            raise ValueError(f'Unknown classif loss {classif_loss}')
+
+        self.loss = classif_loss if classif else nn.MSELoss()
         self.score = Accuracy() if classif else R2Score()
 
         self.optimizer_object = None
@@ -294,8 +308,8 @@ class NeuMiss(pl.LightningModule):
         validation and testing. But each can have separate code in the
         functions below."""
         x, y = batch
-        x = torch.nan_to_num(x)
         m = torch.isnan(x)
+        x = torch.nan_to_num(x)
         y_hat = self(x, m)
         loss = self.loss(y_hat, y.double())
         score = self.score(y_hat, y)
@@ -329,6 +343,7 @@ class NeuMiss(pl.LightningModule):
             'sched_patience': self.sched_patience,
             'sched_threshold': self.sched_threshold,
             'classif': self.classif,
+            'classif_loss': self.classif_loss,
             'random_state': self.random_state,
         }
 
@@ -345,7 +360,8 @@ class BaseNeuMiss(BaseEstimator, NeuMiss):
                  beta0=None, L=None, tmu=None, tsigma=None,
                  coefs=None, optimizer='adam', lr=1e-3, weight_decay=1e-4,
                  sched_factor=0.2, sched_patience=10, sched_threshold=1e-4,
-                 stopping_lr=1e-4, random_state=None, logger=True):
+                 stopping_lr=1e-4, classif_loss='bce', random_state=None,
+                 logger=True):
         """The NeuMiss neural network.
 
         Parameters
@@ -424,6 +440,7 @@ class BaseNeuMiss(BaseEstimator, NeuMiss):
                          sched_patience=sched_patience,
                          sched_threshold=sched_threshold,
                          classif=classif,
+                         classif_loss=classif_loss,
                          random_state=random_state,
                          )
 
@@ -547,7 +564,7 @@ class NeuMissClassifier(BaseNeuMiss):
                  beta0=None, L=None, tmu=None, tsigma=None,
                  coefs=None, optimizer='adam', lr=1e-3, weight_decay=1e-4,
                  sched_factor=0.2, sched_patience=10, sched_threshold=1e-4,
-                 stopping_lr=1e-4,
+                 stopping_lr=1e-4, classif_loss='bce',
                  random_state=0, logger=True):
         super().__init__(n_features=n_features,
                          mode=mode,
@@ -576,6 +593,7 @@ class NeuMissClassifier(BaseNeuMiss):
                          sched_threshold=sched_threshold,
                          stopping_lr=stopping_lr,
                          classif=True,
+                         classif_loss=classif_loss,
                          random_state=random_state,
                          logger=logger,
                          )
