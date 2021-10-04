@@ -39,6 +39,7 @@ class NeuMiss(pl.LightningModule):
         self.classif = classif
         self.random_state = random_state
 
+        self.classif_loss = classif_loss
         if classif_loss == 'bce':
             classif_loss = nn.BCEWithLogitsLoss()
 
@@ -342,6 +343,7 @@ class NeuMiss(pl.LightningModule):
             'sched_patience': self.sched_patience,
             'sched_threshold': self.sched_threshold,
             'classif': self.classif,
+            'classif_loss': self.classif_loss,
             'random_state': self.random_state,
         }
 
