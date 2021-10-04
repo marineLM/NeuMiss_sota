@@ -1,5 +1,6 @@
 """Implements NeuMiss with pytorch and pytorch lightning."""
 import math
+from functools import reduce
 
 import numpy as np
 import pytorch_lightning as pl
@@ -296,7 +297,11 @@ class NeuMiss(pl.LightningModule):
 
         y = y + self.b
 
+        from time import time
+
         if self.mode == SIGMA_ORACLE:
+
+            t0 = time()
 
             s2_list = []
             for m_one in m:
@@ -331,6 +336,99 @@ class NeuMiss(pl.LightningModule):
                 s2_list.append(s2)
 
             s2 = torch.stack(s2_list)
+            print(s2)
+            t1 = time() - t0
+            print(f'Time: {t1}')
+
+            t0 = time()
+
+
+            M_mis = torch.diag_embed(m).double()
+            M_obs = torch.diag_embed(~m).double()
+            # print(m)
+            # print(M_mis)
+            # print(M_obs)
+            # print(M_mis.shape)
+
+            print(type(M_mis))
+            print(type(self.beta[None, :, None]))
+            # exit()
+
+            # print(torch.matmul(M_mis, self.beta[None, :, None]))
+            # exit()
+            print(torch.transpose(M_mis, 1, 2).shape)
+            print(torch.matmul(M_mis, self.beta[None, :, None]).shape)
+            MMB = torch.matmul(
+                torch.transpose(M_mis, 1, 2),
+                torch.matmul(M_mis, self.beta[None, :, None])
+            )
+            print(MMB.shape)
+            # exit()
+            s2 = torch.matmul(
+                MMB.transpose(1, 2),
+                torch.matmul(
+                    self.cov[None, :, :],
+                    MMB
+                )
+            )
+
+            # s2 -= torch.matmul(
+            #     MMB.transpose(1, 2),
+            #     torch.matmul(
+            #         self.cov[None, :, :],
+            #         )
+            # )
+
+            # MCMMB = reduce(torch.matmul, [
+            #     M_obs,
+            #     self.cov[None, :, :],
+            #     MMB,
+            # ])
+
+            MCMMB = torch.matmul(M_obs, torch.matmul(self.cov[None, :, :], MMB))
+
+            MCM = reduce(torch.matmul, [
+                M_obs,
+                self.cov[None, :, :],
+                M_obs.transpose(1, 2),
+            ])
+
+            print(MCM.shape)
+
+            s2 -= torch.matmul(
+                MCMMB.transpose(1, 2),
+                # torch.linalg.lstsq(MCM, MCMMB).solution,
+                torch.matmul(torch.linalg.pinv(MCM), MCMMB),
+            )
+            print(s2.squeeze())
+            t2 = time() - t0
+            print(f'Time: {t2}')
+            print(f'Enhancement: {t1/t2}')
+            exit()
+            cov_obs_inv = torch.inverse(MCM)
+
+            print(cov_obs_inv)
+            exit()
+
+            s2 -= reduce(torch.matmul, [
+                MCMMB.transpose(1, 2),
+                cov_obs_inv,
+                MCMMB
+            ])
+
+            # print(MCMMB.shape)
+            # exit()
+
+
+            print(s2.squeeze())
+            exit()
+
+
+
+
+            exit()
+
+
             return torch.divide(y, torch.sqrt(1 + s2))
 
         return y
