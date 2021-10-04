@@ -297,73 +297,16 @@ class NeuMiss(pl.LightningModule):
 
         y = y + self.b
 
-        from time import time
-
-        if self.mode == SIGMA_ORACLE:
-
-            t0 = time()
-
-            s2_list = []
-            for m_one in m:
-                mis = np.where(m_one)[0]
-                obs = np.where(~m_one)[0]
-
-                if len(mis) == 0:
-                    s2 = 0
-
-                else:
-                    cov_mismis = self.cov[np.ix_(mis, mis)]
-
-                    s2 = torch.linalg.multi_dot([
-                        self.beta[mis],
-                        cov_mismis,
-                        self.beta[mis],
-                    ])
-
-                    if len(obs) > 0:  # If at least one variable is observed
-                        cov_obs = self.cov[np.ix_(obs, obs)]
-                        cov_obs_inv = torch.inverse(cov_obs)
-                        cov_misobs = self.cov[np.ix_(mis, obs)]
-
-                        s2 -= torch.linalg.multi_dot([
-                            self.beta[mis],
-                            cov_misobs,
-                            cov_obs_inv,
-                            cov_misobs.T,
-                            self.beta[mis],
-                        ])
-
-                s2_list.append(s2)
-
-            s2 = torch.stack(s2_list)
-            print(s2)
-            t1 = time() - t0
-            print(f'Time: {t1}')
-
-            t0 = time()
-
+        if self.mode == SIGMA_ORACLE and self.training:
 
             M_mis = torch.diag_embed(m).double()
             M_obs = torch.diag_embed(~m).double()
-            # print(m)
-            # print(M_mis)
-            # print(M_obs)
-            # print(M_mis.shape)
 
-            print(type(M_mis))
-            print(type(self.beta[None, :, None]))
-            # exit()
-
-            # print(torch.matmul(M_mis, self.beta[None, :, None]))
-            # exit()
-            print(torch.transpose(M_mis, 1, 2).shape)
-            print(torch.matmul(M_mis, self.beta[None, :, None]).shape)
             MMB = torch.matmul(
                 torch.transpose(M_mis, 1, 2),
                 torch.matmul(M_mis, self.beta[None, :, None])
             )
-            print(MMB.shape)
-            # exit()
+
             s2 = torch.matmul(
                 MMB.transpose(1, 2),
                 torch.matmul(
@@ -371,19 +314,6 @@ class NeuMiss(pl.LightningModule):
                     MMB
                 )
             )
-
-            # s2 -= torch.matmul(
-            #     MMB.transpose(1, 2),
-            #     torch.matmul(
-            #         self.cov[None, :, :],
-            #         )
-            # )
-
-            # MCMMB = reduce(torch.matmul, [
-            #     M_obs,
-            #     self.cov[None, :, :],
-            #     MMB,
-            # ])
 
             MCMMB = torch.matmul(M_obs, torch.matmul(self.cov[None, :, :], MMB))
 
@@ -393,41 +323,11 @@ class NeuMiss(pl.LightningModule):
                 M_obs.transpose(1, 2),
             ])
 
-            print(MCM.shape)
-
             s2 -= torch.matmul(
                 MCMMB.transpose(1, 2),
-                # torch.linalg.lstsq(MCM, MCMMB).solution,
                 torch.matmul(torch.linalg.pinv(MCM), MCMMB),
             )
-            print(s2.squeeze())
-            t2 = time() - t0
-            print(f'Time: {t2}')
-            print(f'Enhancement: {t1/t2}')
-            exit()
-            cov_obs_inv = torch.inverse(MCM)
-
-            print(cov_obs_inv)
-            exit()
-
-            s2 -= reduce(torch.matmul, [
-                MCMMB.transpose(1, 2),
-                cov_obs_inv,
-                MCMMB
-            ])
-
-            # print(MCMMB.shape)
-            # exit()
-
-
-            print(s2.squeeze())
-            exit()
-
-
-
-
-            exit()
-
+            s2 = s2.squeeze()
 
             return torch.divide(y, torch.sqrt(1 + s2))
 
