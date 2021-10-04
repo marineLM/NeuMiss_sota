@@ -1,6 +1,7 @@
 """Implements NeuMiss with pytorch and pytorch lightning."""
 import math
 
+import numpy as np
 import pytorch_lightning as pl
 import torch
 import torch.nn as nn
@@ -11,6 +12,8 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader, TensorDataset, random_split
 from torchmetrics import Accuracy, R2Score
 
+SIGMA_ORACLE = 'sigma_oracle'
+
 
 class NeuMiss(pl.LightningModule):
     def __init__(self, n_features, mode, depth, residual_connection=False,
@@ -19,7 +22,7 @@ class NeuMiss(pl.LightningModule):
                  beta0=None, L=None, tmu=None, tsigma=None,
                  coefs=None, optimizer='adam', lr=1e-3, weight_decay=1e-4,
                  sched_factor=0.2, sched_patience=10, sched_threshold=1e-4,
-                 classif=False, classif_loss='bce', random_state=0):
+                 classif=False, classif_loss='bce', cov=None, random_state=0):
         super().__init__()
         self.n_features = n_features
         self.mode = mode
@@ -29,6 +32,14 @@ class NeuMiss(pl.LightningModule):
         self.width_factor = width_factor
         self.relu = nn.ReLU()
         self.add_mask = add_mask
+        self.Sigma = Sigma
+        self.mu = mu
+        self.beta = beta
+        self.beta0 = beta0
+        self.L = L
+        self.tmu = tmu
+        self.tsigma = tsigma
+        self.coefs = coefs
 
         self.optimizer = optimizer
         self.lr = lr
@@ -37,9 +48,10 @@ class NeuMiss(pl.LightningModule):
         self.sched_patience = sched_patience
         self.sched_threshold = sched_threshold
         self.classif = classif
+        self.classif_loss = classif_loss
+        self.cov = torch.from_numpy(cov)
         self.random_state = random_state
 
-        self.classif_loss = classif_loss
         if classif_loss == 'bce':
             classif_loss = nn.BCEWithLogitsLoss()
 
@@ -234,6 +246,10 @@ class NeuMiss(pl.LightningModule):
         if self.optimizer not in ['adam', 'sgd']:
             raise ValueError(f'Unknown optimizer "{self.optimizer}."')
 
+        if self.mode == SIGMA_ORACLE:
+            if self.cov is None:
+                raise ValueError('cov is None')
+
     def forward(self, x, m, phase='train'):
         """
         Parameters:
@@ -279,6 +295,43 @@ class NeuMiss(pl.LightningModule):
         y = torch.matmul(h, self.beta)
 
         y = y + self.b
+
+        if self.mode == SIGMA_ORACLE:
+
+            s2_list = []
+            for m_one in m:
+                mis = np.where(m_one)[0]
+                obs = np.where(~m_one)[0]
+
+                if len(mis) == 0:
+                    s2 = 0
+
+                else:
+                    cov_mismis = self.cov[np.ix_(mis, mis)]
+
+                    s2 = torch.linalg.multi_dot([
+                        self.beta[mis],
+                        cov_mismis,
+                        self.beta[mis],
+                    ])
+
+                    if len(obs) > 0:  # If at least one variable is observed
+                        cov_obs = self.cov[np.ix_(obs, obs)]
+                        cov_obs_inv = torch.inverse(cov_obs)
+                        cov_misobs = self.cov[np.ix_(mis, obs)]
+
+                        s2 -= torch.linalg.multi_dot([
+                            self.beta[mis],
+                            cov_misobs,
+                            cov_obs_inv,
+                            cov_misobs.T,
+                            self.beta[mis],
+                        ])
+
+                s2_list.append(s2)
+
+            s2 = torch.stack(s2_list)
+            return torch.divide(y, torch.sqrt(1 + s2))
 
         return y
 
@@ -361,7 +414,7 @@ class BaseNeuMiss(BaseEstimator, NeuMiss):
                  coefs=None, optimizer='adam', lr=1e-3, weight_decay=1e-4,
                  sched_factor=0.2, sched_patience=10, sched_threshold=1e-4,
                  stopping_lr=1e-4, classif_loss='bce', random_state=None,
-                 logger=True):
+                 logger=True, cov=None):
         """The NeuMiss neural network.
 
         Parameters
@@ -441,6 +494,7 @@ class BaseNeuMiss(BaseEstimator, NeuMiss):
                          sched_threshold=sched_threshold,
                          classif=classif,
                          classif_loss=classif_loss,
+                         cov=cov,
                          random_state=random_state,
                          )
 
@@ -520,7 +574,7 @@ class NeuMissRegressor(BaseNeuMiss):
                  coefs=None, optimizer='adam', lr=1e-3, weight_decay=1e-4,
                  sched_factor=0.2, sched_patience=10, sched_threshold=1e-4,
                  stopping_lr=1e-4,
-                 random_state=0, logger=True):
+                 random_state=0, logger=True, cov=None):
         super().__init__(n_features=n_features,
                          mode=mode,
                          depth=depth,
@@ -550,6 +604,7 @@ class NeuMissRegressor(BaseNeuMiss):
                          classif=False,
                          random_state=random_state,
                          logger=logger,
+                         cov=cov,
                          )
 
 
@@ -565,7 +620,7 @@ class NeuMissClassifier(BaseNeuMiss):
                  coefs=None, optimizer='adam', lr=1e-3, weight_decay=1e-4,
                  sched_factor=0.2, sched_patience=10, sched_threshold=1e-4,
                  stopping_lr=1e-4, classif_loss='bce',
-                 random_state=0, logger=True):
+                 random_state=0, logger=True, cov=None):
         super().__init__(n_features=n_features,
                          mode=mode,
                          depth=depth,
@@ -596,4 +651,5 @@ class NeuMissClassifier(BaseNeuMiss):
                          classif_loss=classif_loss,
                          random_state=random_state,
                          logger=logger,
+                         cov=cov,
                          )
