@@ -11,7 +11,7 @@ from pytorch_lightning.callbacks import EarlyStopping, LearningRateMonitor
 from sklearn.base import BaseEstimator
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader, TensorDataset, random_split
-from torchmetrics import Accuracy, R2Score
+from torchmetrics import Accuracy, R2Score, CalibrationError, AUROC
 
 SIGMA_ORACLE = 'sigma_oracle'
 
@@ -70,6 +70,10 @@ class NeuMiss(pl.LightningModule):
         self.score = Accuracy() if classif else R2Score()
 
         self.optimizer_object = None
+        self.metric_auroc = AUROC(compute_on_step=True)
+        self.metric_ece = CalibrationError(norm='l1', compute_on_step=True)
+        self.metric_mce = CalibrationError(norm='max', compute_on_step=True)
+        self.metric_brier = CalibrationError(norm='l2', compute_on_step=True)
 
         self._check_attributes()
 
@@ -362,21 +366,66 @@ class NeuMiss(pl.LightningModule):
         m = torch.isnan(x)
         x = torch.nan_to_num(x)
         y_hat = self(x, m)
+
+        # Compute metrics
         loss = self.loss(y_hat, y.double())
         score = self.score(y_hat, y)
-        self.log(f'{step_name}_loss', loss, prog_bar=prog_bar)
-        self.log(f'{step_name}_score', score, prog_bar=prog_bar)
+
+        metrics = {}
+        metrics[f'{step_name}_loss'] = loss
+        metrics[f'{step_name}_score'] = score
+
+        # Compute metrics specific to classification
+        if self.classif:
+            metrics[f'{step_name}_auroc'] = self.metric_auroc.forward(y_hat, y)
+            metrics[f'{step_name}_ece'] = self.metric_ece.forward(y_hat, y)
+            metrics[f'{step_name}_mce'] = self.metric_mce.forward(y_hat, y)
+            metrics[f'{step_name}_brier'] = self.metric_brier.forward(y_hat, y)
+
+        # Filter out None values that can appear with metric.forward
+        metrics = {k: v for k, v in metrics.items() if v is not None}
+
+        # Log all metrics
+        self.log_dict(metrics, prog_bar=prog_bar)
+
         return loss
+
+    def _step_end(self, step_name):
+        if self.classif:
+            metrics = {}
+            metrics[f'{step_name}_auroc'] = self.metric_auroc.compute()
+            metrics[f'{step_name}_ece'] = self.metric_ece.compute()
+            metrics[f'{step_name}_mce'] = self.metric_mce.compute()
+            metrics[f'{step_name}_brier'] = self.metric_brier.compute()
+
+            self.log_dict(metrics)
+
+            self.metric_auroc.reset()
+            self.metric_ece.reset()
+            self.metric_mce.reset()
+            self.metric_brier.reset()
 
     def training_step(self, train_batch, batch_idx):
         self.log('lr', self.optimizer_object.param_groups[0]['lr'])
         return self._step(train_batch, batch_idx, 'train', prog_bar=False)
 
+    def training_step_end(self, *args, **kwargs):
+        self._step_end('train')
+        super().training_step_end(*args, **kwargs)
+
     def validation_step(self, val_batch, batch_idx):
         return self._step(val_batch, batch_idx, 'val', prog_bar=True)
 
+    def validation_step_end(self, *args, **kwargs):
+        self._step_end('val')
+        return super().validation_step_end(*args, **kwargs)
+
     def test_step(self, test_batch, batch_idx):
         return self._step(test_batch, batch_idx, 'test', prog_bar=True)
+
+    def test_step_end(self, *args, **kwargs):
+        self._step_end('test')
+        return super().test_step_end(*args, **kwargs)
 
     def get_params(self):
         return {
