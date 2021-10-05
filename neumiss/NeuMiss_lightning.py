@@ -9,9 +9,10 @@ import torch.nn as nn
 from pytorch_lightning import seed_everything
 from pytorch_lightning.callbacks import EarlyStopping, LearningRateMonitor
 from sklearn.base import BaseEstimator
+from torch.distributions.normal import Normal
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader, TensorDataset, random_split
-from torchmetrics import Accuracy, R2Score, CalibrationError, AUROC
+from torchmetrics import AUROC, Accuracy, CalibrationError, R2Score
 
 SIGMA_ORACLE = 'sigma_oracle'
 
@@ -377,10 +378,12 @@ class NeuMiss(pl.LightningModule):
 
         # Compute metrics specific to classification
         if self.classif:
-            metrics[f'{step_name}_auroc'] = self.metric_auroc.forward(y_hat, y)
-            metrics[f'{step_name}_ece'] = self.metric_ece.forward(y_hat, y)
-            metrics[f'{step_name}_mce'] = self.metric_mce.forward(y_hat, y)
-            metrics[f'{step_name}_brier'] = self.metric_brier.forward(y_hat, y)
+            y_probs = Normal(0, 1).cdf(y_hat)  # probit
+
+            metrics[f'{step_name}_auroc'] = self.metric_auroc.forward(y_probs, y)
+            metrics[f'{step_name}_ece'] = self.metric_ece.forward(y_probs, y)
+            metrics[f'{step_name}_mce'] = self.metric_mce.forward(y_probs, y)
+            metrics[f'{step_name}_brier'] = self.metric_brier.forward(y_probs, y)
 
         # Filter out None values that can appear with metric.forward
         metrics = {k: v for k, v in metrics.items() if v is not None}
