@@ -70,10 +70,10 @@ class NeuMiss(pl.LightningModule):
         self.score = Accuracy() if classif else R2Score()
 
         self.optimizer_object = None
-        self.metric_auroc = AUROC(compute_on_step=True)
-        self.metric_ece = CalibrationError(norm='l1', compute_on_step=True)
-        self.metric_mce = CalibrationError(norm='max', compute_on_step=True)
-        self.metric_brier = CalibrationError(norm='l2', compute_on_step=True)
+        self.metric_auroc = AUROC(compute_on_step=False)
+        self.metric_ece = CalibrationError(norm='l1', compute_on_step=False)
+        self.metric_mce = CalibrationError(norm='max', compute_on_step=False)
+        self.metric_brier = CalibrationError(norm='l2', compute_on_step=False)
 
         self._check_attributes()
 
