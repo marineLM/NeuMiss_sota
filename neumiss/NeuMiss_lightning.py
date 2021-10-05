@@ -7,7 +7,8 @@ import pytorch_lightning as pl
 import torch
 import torch.nn as nn
 from pytorch_lightning import seed_everything
-from pytorch_lightning.callbacks import EarlyStopping, LearningRateMonitor
+from pytorch_lightning.callbacks import (EarlyStopping, LearningRateMonitor,
+                                         ModelCheckpoint)
 from sklearn.base import BaseEstimator
 from torch.distributions.normal import Normal
 from torch.optim.lr_scheduler import ReduceLROnPlateau
@@ -32,6 +33,7 @@ class NeuMiss(pl.LightningModule):
         self.residual_connection = residual_connection
         self.mlp_depth = mlp_depth
         self.width_factor = width_factor
+        self.init_type = init_type
         self.relu = nn.ReLU()
         self.add_mask = add_mask
         self.Sigma = Sigma
@@ -51,7 +53,7 @@ class NeuMiss(pl.LightningModule):
         self.sched_threshold = sched_threshold
         self.classif = classif
         self.classif_loss = classif_loss
-        self.cov = torch.from_numpy(cov)
+        self.cov = torch.from_numpy(cov) if cov is not None else None
         self.random_state = random_state
 
         if classif_loss == 'bce':
@@ -430,7 +432,7 @@ class NeuMiss(pl.LightningModule):
         self._step_end('test')
         return super().test_step_end(*args, **kwargs)
 
-    def get_params(self):
+    def get_model_params(self):
         return {
             'n_features': self.n_features,
             'mode': self.mode,
@@ -520,6 +522,7 @@ class BaseNeuMiss(BaseEstimator, NeuMiss):
         self.stopping_lr = stopping_lr
         self.trainer = None
         self.trainer_logger = logger
+        self.best_model_path = None
         super().__init__(n_features=n_features,
                          mode=mode,
                          depth=depth,
@@ -571,7 +574,13 @@ class BaseNeuMiss(BaseEstimator, NeuMiss):
                                 multiprocessing_context='fork')
 
         lr_monitor_callback = LearningRateMonitor(logging_interval='step')
-        callbacks = [lr_monitor_callback]
+        checkpoint_callback = ModelCheckpoint(
+            dirpath='_checkpoints',
+            monitor='val_loss',
+            filename='mlp-{epoch:02d}-{val_loss:.2f}',
+            save_weights_only=False,
+        )
+        callbacks = [lr_monitor_callback, checkpoint_callback]
 
         if self.early_stopping:
             early_stop_callback = EarlyStopping(monitor='val_loss')
@@ -587,6 +596,7 @@ class BaseNeuMiss(BaseEstimator, NeuMiss):
                              callbacks=callbacks, logger=self.trainer_logger)
         trainer.fit(self, train_loader, val_loader)
         self.trainer = trainer
+        self.best_model_path = checkpoint_callback.best_model_path
 
         return self
 
@@ -602,8 +612,8 @@ class BaseNeuMiss(BaseEstimator, NeuMiss):
         trainer = pl.Trainer() if self.trainer is None else self.trainer
         return trainer.test(self, test_loader, ckpt_path=ckpt_path)
 
-    def get_params(self):
-        return dict(**super().get_params(), **{
+    def get_model_params(self):
+        return dict(**super().get_model_params(), **{
             'max_epochs': self.max_epochs,
             'batch_size': self.batch_size,
             'early_stopping': self.early_stopping,
