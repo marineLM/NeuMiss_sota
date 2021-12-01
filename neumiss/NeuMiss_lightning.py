@@ -612,6 +612,17 @@ class BaseNeuMiss(BaseEstimator, NeuMiss):
         trainer = pl.Trainer() if self.trainer is None else self.trainer
         return trainer.test(self, test_loader, ckpt_path=ckpt_path)
 
+    def predict(self, X):
+        dataset = self._Xy_to_dataset(X)
+        return self.predict_from_dataset(dataset)
+
+    def predict_from_dataset(self, dataset, batch_size=10000):
+        loader = DataLoader(dataset, batch_size=batch_size,
+                            num_workers=8,
+                            multiprocessing_context='fork')
+        y_pred = [self(x) for x, in loader]
+        return torch.cat(y_pred, axis=0)
+
     def get_model_params(self):
         return dict(**super().get_model_params(), **{
             'max_epochs': self.max_epochs,
