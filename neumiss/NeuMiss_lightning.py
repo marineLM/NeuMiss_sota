@@ -258,7 +258,7 @@ class NeuMiss(pl.LightningModule):
             if self.cov is None:
                 raise ValueError('cov is None')
 
-    def forward(self, x, m, phase='train'):
+    def forward(self, x, phase='train'):
         """
         Parameters:
         ----------
@@ -267,6 +267,8 @@ class NeuMiss(pl.LightningModule):
         m: tensor, shape (batch_size, n_features)
             The missingness indicator (0 if observed and 1 if missing).
         """
+        m = torch.isnan(x)
+        x = torch.nan_to_num(x)
 
         if 'analytical_GSM' in self.mode:
             self.mu_prime = (
@@ -366,9 +368,7 @@ class NeuMiss(pl.LightningModule):
         validation and testing. But each can have separate code in the
         functions below."""
         x, y = batch
-        m = torch.isnan(x)
-        x = torch.nan_to_num(x)
-        y_hat = self(x, m)
+        y_hat = self(x)
 
         # Compute metrics
         loss = self.loss(y_hat, y.double())
