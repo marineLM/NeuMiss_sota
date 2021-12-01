@@ -552,8 +552,10 @@ class BaseNeuMiss(BaseEstimator, NeuMiss):
                          )
 
     @staticmethod
-    def _Xy_to_dataset(X, y):
-        return TensorDataset(torch.from_numpy(X), torch.from_numpy(y))
+    def _Xy_to_dataset(X, y=None):
+        if y is not None:
+            return TensorDataset(torch.from_numpy(X), torch.from_numpy(y))
+        return TensorDataset(torch.from_numpy(X))
 
     def fit(self, X, y, percent_val=0.1):
         dataset = self._Xy_to_dataset(X, y)
