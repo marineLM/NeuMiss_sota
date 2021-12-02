@@ -19,7 +19,8 @@ class TestNeuMissClassifier(unittest.TestCase):
                                     residual_connection=True,
                                     early_stopping=True, optimizer='adam',
                                     sched_factor=0.2, sched_patience=1,
-                                    sched_threshold=1e-4, stopping_lr=1e-5)
+                                    sched_threshold=1e-4, stopping_lr=1e-5,
+                                    logger=False)
         neumiss.fit_from_dataset(ds_train, percent_val=0.2)
         neumiss.test_from_dataset(ds_test)
 
@@ -45,7 +46,8 @@ class TestNeuMissClassifier(unittest.TestCase):
                                     early_stopping=True, optimizer='adam',
                                     sched_factor=0.2, sched_patience=1,
                                     sched_threshold=1e-4, Sigma=Sigma_hat,
-                                    mu=mu_hat, L=L_hat, stopping_lr=1e-5)
+                                    mu=mu_hat, L=L_hat, stopping_lr=1e-5,
+                                    logger=False)
         neumiss.fit_from_dataset(ds_train, percent_val=0.2)
         neumiss.test_from_dataset(ds_test)
 
@@ -64,7 +66,8 @@ class TestNeuMissRegressor(unittest.TestCase):
                                    residual_connection=True,
                                    early_stopping=True, optimizer='adam',
                                    sched_factor=0.2, sched_patience=1,
-                                   sched_threshold=1e-4, stopping_lr=1e-5)
+                                   sched_threshold=1e-4, stopping_lr=1e-5,
+                                   logger=False)
         neumiss.fit_from_dataset(ds_train, percent_val=0.5)
         neumiss.test_from_dataset(ds_test)
 
@@ -90,6 +93,7 @@ class TestNeuMissRegressor(unittest.TestCase):
                                    early_stopping=True, optimizer='adam',
                                    sched_factor=0.2, sched_patience=1,
                                    sched_threshold=1e-4, Sigma=Sigma_hat,
-                                   mu=mu_hat, L=L_hat, stopping_lr=1e-5)
+                                   mu=mu_hat, L=L_hat, stopping_lr=1e-5,
+                                   logger=False)
         neumiss.fit_from_dataset(ds_train, percent_val=0.5)
         neumiss.test_from_dataset(ds_test)

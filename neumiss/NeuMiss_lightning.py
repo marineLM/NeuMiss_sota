@@ -575,14 +575,19 @@ class BaseNeuMiss(BaseEstimator, NeuMiss):
                                 num_workers=8,
                                 multiprocessing_context='fork')
 
+        callbacks = []
+
         lr_monitor_callback = LearningRateMonitor(logging_interval='step')
+        if self.trainer_logger:
+            callbacks.append(lr_monitor_callback)
+
         checkpoint_callback = ModelCheckpoint(
             dirpath='_checkpoints',
             monitor='val_loss',
-            filename='mlp-{epoch:02d}-{val_loss:.2f}',
+            filename='neumiss-{epoch:02d}-{val_loss:.2f}',
             save_weights_only=False,
         )
-        callbacks = [lr_monitor_callback, checkpoint_callback]
+        callbacks.append(checkpoint_callback)
 
         if self.early_stopping:
             early_stop_callback = EarlyStopping(monitor='val_loss')
