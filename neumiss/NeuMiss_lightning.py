@@ -343,13 +343,25 @@ class NeuMiss(pl.LightningModule):
         return y
 
     def configure_optimizers(self):
+        # Create parameter groups
+        group_wd = []
+        group_no_wd = []
+        for name, param in self.named_parameters():
+            if name in ['mu', 'b']:
+                group_no_wd.append(param)
+            else:
+                group_wd.append(param)
+
+        params = [
+            {'params': group_wd, 'weight_decay': self.weight_decay},
+            {'params': group_no_wd, 'weight_decay': 0},
+        ]
+
         if self.optimizer == 'adam':
-            optimizer = torch.optim.Adam(self.parameters(), lr=self.lr,
-                                         weight_decay=self.weight_decay)
+            optimizer = torch.optim.Adam(params, lr=self.lr)
 
         elif self.optimizer == 'sgd':
-            optimizer = torch.optim.SGD(self.parameters(), lr=self.lr,
-                                        weight_decay=self.weight_decay)
+            optimizer = torch.optim.SGD(params, lr=self.lr)
 
         scheduler = ReduceLROnPlateau(
             optimizer, mode='min', factor=self.sched_factor,
