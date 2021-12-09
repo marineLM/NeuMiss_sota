@@ -73,10 +73,26 @@ class NeuMiss(pl.LightningModule):
         self.score = Accuracy() if classif else R2Score()
 
         self.optimizer_object = None
-        self.metric_auroc = AUROC(compute_on_step=False)
-        self.metric_ece = CalibrationError(norm='l1', compute_on_step=False)
-        self.metric_mce = CalibrationError(norm='max', compute_on_step=False)
-        self.metric_brier = CalibrationError(norm='l2', compute_on_step=False)
+        self.metric_auroc = {
+            'train': AUROC(compute_on_step=False),
+            'val': AUROC(compute_on_step=False),
+            'test': AUROC(compute_on_step=False),
+        }
+        self.metric_ece = {
+            'train': CalibrationError(norm='l1', compute_on_step=False),
+            'val': CalibrationError(norm='l1', compute_on_step=False),
+            'test': CalibrationError(norm='l1', compute_on_step=False),
+        }
+        self.metric_mce = {
+            'train': CalibrationError(norm='max', compute_on_step=False),
+            'val': CalibrationError(norm='max', compute_on_step=False),
+            'test': CalibrationError(norm='max', compute_on_step=False),
+        }
+        self.metric_brier = {
+            'train': CalibrationError(norm='l2', compute_on_step=False),
+            'val': CalibrationError(norm='l2', compute_on_step=False),
+            'test': CalibrationError(norm='l2', compute_on_step=False),
+        }
 
         self._check_attributes()
 
@@ -387,17 +403,22 @@ class NeuMiss(pl.LightningModule):
         score = self.score(y_hat, y)
 
         metrics = {}
-        metrics[f'{step_name}_loss'] = loss
-        metrics[f'{step_name}_score'] = score
+        metrics[f'{step_name}_loss'] = loss.item()
+        metrics[f'{step_name}_score'] = score.item()
 
         # Compute metrics specific to classification
         if self.classif:
             y_probs = Normal(0, 1).cdf(y_hat)  # probit
 
-            metrics[f'{step_name}_auroc'] = self.metric_auroc.forward(y_probs, y)
-            metrics[f'{step_name}_ece'] = self.metric_ece.forward(y_probs, y)
-            metrics[f'{step_name}_mce'] = self.metric_mce.forward(y_probs, y)
-            metrics[f'{step_name}_brier'] = self.metric_brier.forward(y_probs, y)
+            metric_auroc = self.metric_auroc[step_name]
+            metric_ece = self.metric_ece[step_name]
+            metric_mce = self.metric_mce[step_name]
+            metric_brier = self.metric_brier[step_name]
+
+            metrics[f'{step_name}_auroc'] = metric_auroc.forward(y_probs, y)
+            metrics[f'{step_name}_ece'] = metric_ece.forward(y_probs, y)
+            metrics[f'{step_name}_mce'] = metric_mce.forward(y_probs, y)
+            metrics[f'{step_name}_brier'] = metric_brier.forward(y_probs, y)
 
         # Filter out None values that can appear with metric.forward
         metrics = {k: v for k, v in metrics.items() if v is not None}
@@ -407,42 +428,48 @@ class NeuMiss(pl.LightningModule):
 
         return loss
 
-    def _step_end(self, step_name):
+    def _epoch_end(self, step_name):
         if self.classif:
             metrics = {}
-            metrics[f'{step_name}_auroc'] = self.metric_auroc.compute()
-            metrics[f'{step_name}_ece'] = self.metric_ece.compute()
-            metrics[f'{step_name}_mce'] = self.metric_mce.compute()
-            metrics[f'{step_name}_brier'] = self.metric_brier.compute()
+
+            metric_auroc = self.metric_auroc[step_name]
+            metric_ece = self.metric_ece[step_name]
+            metric_mce = self.metric_mce[step_name]
+            metric_brier = self.metric_brier[step_name]
+
+            metrics[f'{step_name}_auroc'] = metric_auroc.compute().item()
+            metrics[f'{step_name}_ece'] = metric_ece.compute().item()
+            metrics[f'{step_name}_mce'] = metric_mce.compute().item()
+            metrics[f'{step_name}_brier'] = metric_brier.compute().item()
 
             self.log_dict(metrics)
 
-            self.metric_auroc.reset()
-            self.metric_ece.reset()
-            self.metric_mce.reset()
-            self.metric_brier.reset()
+            metric_auroc.reset()
+            metric_ece.reset()
+            metric_mce.reset()
+            metric_brier.reset()
 
     def training_step(self, train_batch, batch_idx):
         self.log('lr', self.optimizer_object.param_groups[0]['lr'])
         return self._step(train_batch, batch_idx, 'train', prog_bar=False)
 
-    def training_step_end(self, *args, **kwargs):
-        self._step_end('train')
-        super().training_step_end(*args, **kwargs)
+    def training_epoch_end(self, *args, **kwargs):
+        self._epoch_end('train')
+        super().training_epoch_end(*args, **kwargs)
 
     def validation_step(self, val_batch, batch_idx):
         return self._step(val_batch, batch_idx, 'val', prog_bar=True)
 
-    def validation_step_end(self, *args, **kwargs):
-        self._step_end('val')
-        return super().validation_step_end(*args, **kwargs)
+    def validation_epoch_end(self, *args, **kwargs):
+        self._epoch_end('val')
+        return super().validation_epoch_end(*args, **kwargs)
 
     def test_step(self, test_batch, batch_idx):
         return self._step(test_batch, batch_idx, 'test', prog_bar=True)
 
-    def test_step_end(self, *args, **kwargs):
-        self._step_end('test')
-        return super().test_step_end(*args, **kwargs)
+    def test_epoch_end(self, *args, **kwargs):
+        self._epoch_end('test')
+        return super().test_epoch_end(*args, **kwargs)
 
     def get_model_params(self):
         return {
