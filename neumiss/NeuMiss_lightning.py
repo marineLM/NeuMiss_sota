@@ -408,7 +408,7 @@ class NeuMiss(pl.LightningModule):
 
         # Compute metrics specific to classification
         if self.classif:
-            y_probs = Normal(0, 1).cdf(y_hat)  # probit
+            y_probs = torch.sigmoid(y_hat)
 
             metric_auroc = self.metric_auroc[step_name]
             metric_ece = self.metric_ece[step_name]
