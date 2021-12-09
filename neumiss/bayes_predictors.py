@@ -169,12 +169,17 @@ class MARBayesPredictor(BaseBayesPredictor):
                 link_fn = get_link_function(self.link,
                                             curvature=self.curvature)
 
-                if len(obs) * len(mis) > 0:
+                if len(mis) > 0:
                     cov_mismis = self.cov[np.ix_(mis, mis)]
-                    cov_mis_obs = cov_mismis - cov_misobs.dot(
-                        cov_obs_inv).dot(cov_misobs.T)
+                    cov_mis_obs = cov_mismis
+
+                    if len(obs) > 0:
+                        cov_mis_obs -= cov_misobs.dot(
+                            cov_obs_inv).dot(cov_misobs.T)
+
                     var_Tmis = self.beta[mis + 1].dot(
                         cov_mis_obs).dot(self.beta[mis + 1])
+
                 else:
                     var_Tmis = 0
 

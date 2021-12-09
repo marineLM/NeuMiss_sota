@@ -44,10 +44,10 @@ class BaseDataset(ABC, TensorDataset):
         """
         self.n_samples = n_samples
         self.X_model = X_model
-        self.mean = mean
-        self.cov = cov
+        self.mean = np.atleast_1d(mean)
+        self.cov = np.atleast_2d(cov)
         self.link = link
-        self.beta = beta
+        self.beta = np.atleast_1d(beta)
         self.curvature = curvature
         self.snr = snr
         self.random_state = random_state

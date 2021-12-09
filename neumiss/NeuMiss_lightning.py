@@ -1,15 +1,21 @@
 """Implements NeuMiss with pytorch and pytorch lightning."""
 import math
+from functools import reduce
 
+import numpy as np
 import pytorch_lightning as pl
 import torch
 import torch.nn as nn
 from pytorch_lightning import seed_everything
-from pytorch_lightning.callbacks import EarlyStopping, LearningRateMonitor
+from pytorch_lightning.callbacks import (EarlyStopping, LearningRateMonitor,
+                                         ModelCheckpoint)
 from sklearn.base import BaseEstimator
+from torch.distributions.normal import Normal
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader, TensorDataset, random_split
-from torchmetrics import Accuracy, R2Score
+from torchmetrics import AUROC, Accuracy, CalibrationError, R2Score
+
+SIGMA_ORACLE = 'sigma_oracle'
 
 
 class NeuMiss(pl.LightningModule):
@@ -19,7 +25,7 @@ class NeuMiss(pl.LightningModule):
                  beta0=None, L=None, tmu=None, tsigma=None,
                  coefs=None, optimizer='adam', lr=1e-3, weight_decay=1e-4,
                  sched_factor=0.2, sched_patience=10, sched_threshold=1e-4,
-                 classif=False, classif_loss='bce', random_state=0):
+                 classif=False, classif_loss='bce', cov=None, random_state=0):
         super().__init__()
         self.n_features = n_features
         self.mode = mode
@@ -27,8 +33,17 @@ class NeuMiss(pl.LightningModule):
         self.residual_connection = residual_connection
         self.mlp_depth = mlp_depth
         self.width_factor = width_factor
+        self.init_type = init_type
         self.relu = nn.ReLU()
         self.add_mask = add_mask
+        self.Sigma = Sigma
+        self.mu = mu
+        self.beta = beta
+        self.beta0 = beta0
+        self.L = L
+        self.tmu = tmu
+        self.tsigma = tsigma
+        self.coefs = coefs
 
         self.optimizer = optimizer
         self.lr = lr
@@ -37,9 +52,10 @@ class NeuMiss(pl.LightningModule):
         self.sched_patience = sched_patience
         self.sched_threshold = sched_threshold
         self.classif = classif
+        self.classif_loss = classif_loss
+        self.cov = torch.from_numpy(cov) if cov is not None else None
         self.random_state = random_state
 
-        self.classif_loss = classif_loss
         if classif_loss == 'bce':
             classif_loss = nn.BCEWithLogitsLoss()
 
@@ -57,6 +73,26 @@ class NeuMiss(pl.LightningModule):
         self.score = Accuracy() if classif else R2Score()
 
         self.optimizer_object = None
+        self.metric_auroc = {
+            'train': AUROC(compute_on_step=False),
+            'val': AUROC(compute_on_step=False),
+            'test': AUROC(compute_on_step=False),
+        }
+        self.metric_ece = {
+            'train': CalibrationError(norm='l1', compute_on_step=False),
+            'val': CalibrationError(norm='l1', compute_on_step=False),
+            'test': CalibrationError(norm='l1', compute_on_step=False),
+        }
+        self.metric_mce = {
+            'train': CalibrationError(norm='max', compute_on_step=False),
+            'val': CalibrationError(norm='max', compute_on_step=False),
+            'test': CalibrationError(norm='max', compute_on_step=False),
+        }
+        self.metric_brier = {
+            'train': CalibrationError(norm='l2', compute_on_step=False),
+            'val': CalibrationError(norm='l2', compute_on_step=False),
+            'test': CalibrationError(norm='l2', compute_on_step=False),
+        }
 
         self._check_attributes()
 
@@ -234,7 +270,11 @@ class NeuMiss(pl.LightningModule):
         if self.optimizer not in ['adam', 'sgd']:
             raise ValueError(f'Unknown optimizer "{self.optimizer}."')
 
-    def forward(self, x, m, phase='train'):
+        if self.mode == SIGMA_ORACLE:
+            if self.cov is None:
+                raise ValueError('cov is None')
+
+    def forward(self, x, phase='train'):
         """
         Parameters:
         ----------
@@ -243,6 +283,8 @@ class NeuMiss(pl.LightningModule):
         m: tensor, shape (batch_size, n_features)
             The missingness indicator (0 if observed and 1 if missing).
         """
+        m = torch.isnan(x)
+        x = torch.nan_to_num(x)
 
         if 'analytical_GSM' in self.mode:
             self.mu_prime = (
@@ -280,16 +322,62 @@ class NeuMiss(pl.LightningModule):
 
         y = y + self.b
 
+        if self.mode == SIGMA_ORACLE and self.training:
+
+            M_mis = torch.diag_embed(m).double()
+            M_obs = torch.diag_embed(~m).double()
+
+            MMB = torch.matmul(
+                torch.transpose(M_mis, 1, 2),
+                torch.matmul(M_mis, self.beta[None, :, None])
+            )
+
+            s2 = torch.matmul(
+                MMB.transpose(1, 2),
+                torch.matmul(
+                    self.cov[None, :, :],
+                    MMB
+                )
+            )
+
+            MCMMB = torch.matmul(M_obs, torch.matmul(self.cov[None, :, :], MMB))
+
+            MCM = reduce(torch.matmul, [
+                M_obs,
+                self.cov[None, :, :],
+                M_obs.transpose(1, 2),
+            ])
+
+            s2 -= torch.matmul(
+                MCMMB.transpose(1, 2),
+                torch.matmul(torch.linalg.pinv(MCM), MCMMB),
+            )
+            s2 = s2.squeeze()
+
+            return torch.divide(y, torch.sqrt(1 + s2))
+
         return y
 
     def configure_optimizers(self):
+        # Create parameter groups
+        group_wd = []
+        group_no_wd = []
+        for name, param in self.named_parameters():
+            if name in ['mu', 'b']:
+                group_no_wd.append(param)
+            else:
+                group_wd.append(param)
+
+        params = [
+            {'params': group_wd, 'weight_decay': self.weight_decay},
+            {'params': group_no_wd, 'weight_decay': 0},
+        ]
+
         if self.optimizer == 'adam':
-            optimizer = torch.optim.Adam(self.parameters(), lr=self.lr,
-                                         weight_decay=self.weight_decay)
+            optimizer = torch.optim.Adam(params, lr=self.lr)
 
         elif self.optimizer == 'sgd':
-            optimizer = torch.optim.SGD(self.parameters(), lr=self.lr,
-                                        weight_decay=self.weight_decay)
+            optimizer = torch.optim.SGD(params, lr=self.lr)
 
         scheduler = ReduceLROnPlateau(
             optimizer, mode='min', factor=self.sched_factor,
@@ -308,26 +396,82 @@ class NeuMiss(pl.LightningModule):
         validation and testing. But each can have separate code in the
         functions below."""
         x, y = batch
-        m = torch.isnan(x)
-        x = torch.nan_to_num(x)
-        y_hat = self(x, m)
+        y_hat = self(x)
+
+        # Compute metrics
         loss = self.loss(y_hat, y.double())
         score = self.score(y_hat, y)
-        self.log(f'{step_name}_loss', loss, prog_bar=prog_bar)
-        self.log(f'{step_name}_score', score, prog_bar=prog_bar)
+
+        metrics = {}
+        metrics[f'{step_name}_loss'] = loss.item()
+        metrics[f'{step_name}_score'] = score.item()
+
+        # Compute metrics specific to classification
+        if self.classif:
+            y_probs = Normal(0, 1).cdf(y_hat)  # probit
+
+            metric_auroc = self.metric_auroc[step_name]
+            metric_ece = self.metric_ece[step_name]
+            metric_mce = self.metric_mce[step_name]
+            metric_brier = self.metric_brier[step_name]
+
+            metrics[f'{step_name}_auroc'] = metric_auroc.forward(y_probs, y)
+            metrics[f'{step_name}_ece'] = metric_ece.forward(y_probs, y)
+            metrics[f'{step_name}_mce'] = metric_mce.forward(y_probs, y)
+            metrics[f'{step_name}_brier'] = metric_brier.forward(y_probs, y)
+
+        # Filter out None values that can appear with metric.forward
+        metrics = {k: v for k, v in metrics.items() if v is not None}
+
+        # Log all metrics
+        self.log_dict(metrics, prog_bar=prog_bar)
+
         return loss
+
+    def _epoch_end(self, step_name):
+        if self.classif:
+            metrics = {}
+
+            metric_auroc = self.metric_auroc[step_name]
+            metric_ece = self.metric_ece[step_name]
+            metric_mce = self.metric_mce[step_name]
+            metric_brier = self.metric_brier[step_name]
+
+            metrics[f'{step_name}_auroc'] = metric_auroc.compute().item()
+            metrics[f'{step_name}_ece'] = metric_ece.compute().item()
+            metrics[f'{step_name}_mce'] = metric_mce.compute().item()
+            metrics[f'{step_name}_brier'] = metric_brier.compute().item()
+
+            self.log_dict(metrics)
+
+            metric_auroc.reset()
+            metric_ece.reset()
+            metric_mce.reset()
+            metric_brier.reset()
 
     def training_step(self, train_batch, batch_idx):
         self.log('lr', self.optimizer_object.param_groups[0]['lr'])
         return self._step(train_batch, batch_idx, 'train', prog_bar=False)
 
+    def training_epoch_end(self, *args, **kwargs):
+        self._epoch_end('train')
+        super().training_epoch_end(*args, **kwargs)
+
     def validation_step(self, val_batch, batch_idx):
         return self._step(val_batch, batch_idx, 'val', prog_bar=True)
+
+    def validation_epoch_end(self, *args, **kwargs):
+        self._epoch_end('val')
+        return super().validation_epoch_end(*args, **kwargs)
 
     def test_step(self, test_batch, batch_idx):
         return self._step(test_batch, batch_idx, 'test', prog_bar=True)
 
-    def get_params(self):
+    def test_epoch_end(self, *args, **kwargs):
+        self._epoch_end('test')
+        return super().test_epoch_end(*args, **kwargs)
+
+    def get_model_params(self):
         return {
             'n_features': self.n_features,
             'mode': self.mode,
@@ -361,7 +505,7 @@ class BaseNeuMiss(BaseEstimator, NeuMiss):
                  coefs=None, optimizer='adam', lr=1e-3, weight_decay=1e-4,
                  sched_factor=0.2, sched_patience=10, sched_threshold=1e-4,
                  stopping_lr=1e-4, classif_loss='bce', random_state=None,
-                 logger=True):
+                 logger=True, cov=None):
         """The NeuMiss neural network.
 
         Parameters
@@ -417,6 +561,7 @@ class BaseNeuMiss(BaseEstimator, NeuMiss):
         self.stopping_lr = stopping_lr
         self.trainer = None
         self.trainer_logger = logger
+        self.best_model_path = None
         super().__init__(n_features=n_features,
                          mode=mode,
                          depth=depth,
@@ -441,12 +586,15 @@ class BaseNeuMiss(BaseEstimator, NeuMiss):
                          sched_threshold=sched_threshold,
                          classif=classif,
                          classif_loss=classif_loss,
+                         cov=cov,
                          random_state=random_state,
                          )
 
     @staticmethod
-    def _Xy_to_dataset(X, y):
-        return TensorDataset(torch.from_numpy(X), torch.from_numpy(y))
+    def _Xy_to_dataset(X, y=None):
+        if y is not None:
+            return TensorDataset(torch.from_numpy(X), torch.from_numpy(y))
+        return TensorDataset(torch.from_numpy(X))
 
     def fit(self, X, y, percent_val=0.1):
         dataset = self._Xy_to_dataset(X, y)
@@ -466,8 +614,19 @@ class BaseNeuMiss(BaseEstimator, NeuMiss):
                                 num_workers=8,
                                 multiprocessing_context='fork')
 
+        callbacks = []
+
         lr_monitor_callback = LearningRateMonitor(logging_interval='step')
-        callbacks = [lr_monitor_callback]
+        if self.trainer_logger:
+            callbacks.append(lr_monitor_callback)
+
+        checkpoint_callback = ModelCheckpoint(
+            dirpath='_checkpoints',
+            monitor='val_loss',
+            filename='neumiss-{epoch:02d}-{val_loss:.2f}',
+            save_weights_only=False,
+        )
+        callbacks.append(checkpoint_callback)
 
         if self.early_stopping:
             early_stop_callback = EarlyStopping(monitor='val_loss')
@@ -483,6 +642,7 @@ class BaseNeuMiss(BaseEstimator, NeuMiss):
                              callbacks=callbacks, logger=self.trainer_logger)
         trainer.fit(self, train_loader, val_loader)
         self.trainer = trainer
+        self.best_model_path = checkpoint_callback.best_model_path
 
         return self
 
@@ -498,8 +658,19 @@ class BaseNeuMiss(BaseEstimator, NeuMiss):
         trainer = pl.Trainer() if self.trainer is None else self.trainer
         return trainer.test(self, test_loader, ckpt_path=ckpt_path)
 
-    def get_params(self):
-        return dict(**super().get_params(), **{
+    def predict(self, X):
+        dataset = self._Xy_to_dataset(X)
+        return self.predict_from_dataset(dataset)
+
+    def predict_from_dataset(self, dataset, batch_size=10000):
+        loader = DataLoader(dataset, batch_size=batch_size,
+                            num_workers=8,
+                            multiprocessing_context='fork')
+        y_pred = [self(x) for x, in loader]
+        return torch.cat(y_pred, axis=0)
+
+    def get_model_params(self):
+        return dict(**super().get_model_params(), **{
             'max_epochs': self.max_epochs,
             'batch_size': self.batch_size,
             'early_stopping': self.early_stopping,
@@ -520,7 +691,7 @@ class NeuMissRegressor(BaseNeuMiss):
                  coefs=None, optimizer='adam', lr=1e-3, weight_decay=1e-4,
                  sched_factor=0.2, sched_patience=10, sched_threshold=1e-4,
                  stopping_lr=1e-4,
-                 random_state=0, logger=True):
+                 random_state=0, logger=True, cov=None):
         super().__init__(n_features=n_features,
                          mode=mode,
                          depth=depth,
@@ -550,6 +721,7 @@ class NeuMissRegressor(BaseNeuMiss):
                          classif=False,
                          random_state=random_state,
                          logger=logger,
+                         cov=cov,
                          )
 
 
@@ -565,7 +737,7 @@ class NeuMissClassifier(BaseNeuMiss):
                  coefs=None, optimizer='adam', lr=1e-3, weight_decay=1e-4,
                  sched_factor=0.2, sched_patience=10, sched_threshold=1e-4,
                  stopping_lr=1e-4, classif_loss='bce',
-                 random_state=0, logger=True):
+                 random_state=0, logger=True, cov=None):
         super().__init__(n_features=n_features,
                          mode=mode,
                          depth=depth,
@@ -596,4 +768,5 @@ class NeuMissClassifier(BaseNeuMiss):
                          classif_loss=classif_loss,
                          random_state=random_state,
                          logger=logger,
+                         cov=cov,
                          )
