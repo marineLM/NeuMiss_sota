@@ -102,3 +102,28 @@ class TestMNARDataset(unittest.TestCase):
                         curvature=curvature, missing_rate=missing_rate,
                         p_params=p_params, lbd=lbd, c=c, k=k,
                         sigma2_tilde=sigma2_tilde, model=model, random_state=0)
+
+
+class TestBaseDataset(unittest.TestCase):
+
+    @given(
+        link=st.sampled_from(['linear', 'square', 'stairs', 'logit', 'probit']),
+        snr=st.one_of(st.floats(min_value=0)),
+        curvature=st.one_of(st.floats(min_value=0)),
+    )
+    def test_add(self, link, snr, curvature):
+        ds1 = CompleteDataset(n_samples=1, mean=1, cov=1, link=link, beta=[1, 1],
+                              X_model='gaussian', snr=snr, curvature=curvature,
+                              random_state=0)
+
+        ds2 = CompleteDataset(n_samples=1, mean=1, cov=1, link=link, beta=[1, 1],
+                              X_model='gaussian', snr=snr, curvature=curvature,
+                              random_state=0)
+
+        ds = ds1 + ds2
+
+        self.assertEqual(ds.n_samples, ds1.n_samples + ds2.n_samples)
+        self.assertEqual(ds.X.shape, (ds.n_samples, ds1.X.shape[1]))
+        self.assertEqual(ds.y.shape, (ds.n_samples,))
+        self.assertEqual(ds.M.shape, (ds.n_samples, ds1.M.shape[1]))
+

@@ -1,15 +1,17 @@
 """Simulate Gaussian datasets with MCAR, MAR or MNAR missing values."""
+import copy
 from abc import ABC, abstractmethod
 
-import torch
-from torch._utils import _accumulate
-from torch import randperm
 import numpy as np
+import torch
 from sklearn.utils import check_random_state
+from torch import randperm
+from torch._utils import _accumulate
 from torch.utils.data import TensorDataset
 
 from .amputation import (MCAR, MNAR_GSM, MNAR_PSM, MAR_logistic, MNAR_logistic,
-                         MNAR_logistic_uniform, Probit, Sigmoid, Square, Stairs)
+                         MNAR_logistic_uniform, Probit, Sigmoid, Square,
+                         Stairs)
 
 
 class BaseDataset(ABC, TensorDataset):
@@ -70,6 +72,7 @@ class BaseDataset(ABC, TensorDataset):
         else:
             self.X, self.y = _data
             self.M = np.isnan(self.X)
+            self.n_samples = self.X.shape[0]
 
         # Create a TensorDataset
         super().__init__(torch.from_numpy(self.X), torch.from_numpy(self.y))
@@ -167,6 +170,48 @@ class BaseDataset(ABC, TensorDataset):
             'snr': self.snr,
             'random_state': self.random_state,
         }
+
+    def _check_equal_params(self, other):
+        return (
+            self.X_model == other.X_model and
+            np.allclose(self.mean, other.mean) and
+            np.allclose(self.cov, other.cov) and
+            np.allclose(self.beta, other.beta) and
+            self.link == other.link and
+            self.curvature == other.curvature and
+            self.snr == other.snr and
+            (self.random_state is None) == (other.random_state is None)
+        )
+
+    def __add__(self, other):
+        if not self._check_equal_params(other):
+            raise ValueError('Adding two datasets that have different parameters')
+
+        X = np.concatenate([self.X, other.X], axis=0)
+        y = np.concatenate([self.y, other.y], axis=0)
+
+        return _MixedDataset(
+            n_samples=X.shape[0],
+            mean=self.mean,
+            cov=self.cov,
+            link=self.link,
+            beta=self.beta,
+            curvature=self.curvature,
+            snr=self.snr,
+            X_model=self.X_model,
+            random_state=self.random_state,
+            _data=(X, y),
+        )
+
+
+class _MixedDataset(BaseDataset):
+    """Dataset with mixed parameters."""
+
+    def _generate_mask(self):
+        raise ValueError('Cannot generate mask in a _MixedDataset')
+
+    def get_data_params(self):
+        return dict(super().get_data_params(), **{'mv_mechanism': 'mixed'})
 
 
 class CompleteDataset(BaseDataset):
