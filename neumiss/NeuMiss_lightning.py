@@ -608,10 +608,10 @@ class BaseNeuMiss(BaseEstimator, NeuMiss):
         n_train = len(dataset) - n_val
         ds_train, ds_val = random_split(dataset, [n_train, n_val])
         train_loader = DataLoader(ds_train, batch_size=self.batch_size,
-                                  shuffle=True, num_workers=8,
+                                  shuffle=True, num_workers=1,
                                   multiprocessing_context='fork')
         val_loader = DataLoader(ds_val, batch_size=self.batch_size,
-                                num_workers=8,
+                                num_workers=1,
                                 multiprocessing_context='fork')
 
         callbacks = []
@@ -652,7 +652,7 @@ class BaseNeuMiss(BaseEstimator, NeuMiss):
 
     def test_from_dataset(self, dataset, ckpt_path='best'):
         test_loader = DataLoader(dataset, batch_size=self.batch_size,
-                                 num_workers=8,
+                                 num_workers=1,
                                  multiprocessing_context='fork')
 
         trainer = pl.Trainer() if self.trainer is None else self.trainer
@@ -664,7 +664,7 @@ class BaseNeuMiss(BaseEstimator, NeuMiss):
 
     def predict_from_dataset(self, dataset, batch_size=10000):
         loader = DataLoader(dataset, batch_size=batch_size,
-                            num_workers=8,
+                            num_workers=1,
                             multiprocessing_context='fork')
         y_pred = [self(x) for x, in loader]
         return torch.cat(y_pred, axis=0)
