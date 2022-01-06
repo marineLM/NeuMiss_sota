@@ -398,18 +398,13 @@ class NeuMiss(pl.LightningModule):
         x, y = batch
         y_hat = self(x)
 
-        # Compute metrics
-        loss = self.loss(y_hat, y.double())
-        score = self.score(y_hat, y)
-
         metrics = {}
-        metrics[f'{step_name}_loss'] = loss.item()
-        metrics[f'{step_name}_score'] = score.item()
 
         # Compute metrics specific to classification
         if self.classif:
             y_probs = torch.sigmoid(y_hat)
 
+            score = self.score(y_probs, y)
             metric_auroc = self.metric_auroc[step_name]
             metric_ece = self.metric_ece[step_name]
             metric_mce = self.metric_mce[step_name]
@@ -419,6 +414,15 @@ class NeuMiss(pl.LightningModule):
             metrics[f'{step_name}_ece'] = metric_ece.forward(y_probs, y)
             metrics[f'{step_name}_mce'] = metric_mce.forward(y_probs, y)
             metrics[f'{step_name}_brier'] = metric_brier.forward(y_probs, y)
+
+        else:
+            score = self.score(y_hat, y)
+
+        # Compute other metrics
+        loss = self.loss(y_hat, y.double())
+
+        metrics[f'{step_name}_loss'] = loss.item()
+        metrics[f'{step_name}_score'] = score.item()
 
         # Filter out None values that can appear with metric.forward
         metrics = {k: v for k, v in metrics.items() if v is not None}
