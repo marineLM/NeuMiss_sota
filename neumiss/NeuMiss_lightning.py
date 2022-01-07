@@ -667,10 +667,10 @@ class BaseNeuMiss(BaseEstimator, NeuMiss):
         return self.predict_from_dataset(dataset)
 
     def predict_from_dataset(self, dataset, batch_size=10000):
-        loader = DataLoader(dataset, batch_size=batch_size,
+        loader = DataLoader(dataset, batch_size=len(dataset),
                             num_workers=1,
                             multiprocessing_context='fork')
-        y_pred = [self(x) for x, in loader]
+        y_pred = [self(x) for x, _ in loader]
         return torch.cat(y_pred, axis=0)
 
     def get_model_params(self):
