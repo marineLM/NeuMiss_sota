@@ -1,6 +1,7 @@
 # Custom
 .vscode
 lightning_logs
+_checkpoints
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

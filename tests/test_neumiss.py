@@ -1,7 +1,7 @@
 import unittest
 
 import numpy as np
-from neumiss.datasets import CompleteDataset, MCARDataset
+from datamiss import CompleteDataset, MCARDataset
 from neumiss.NeuMiss_lightning import NeuMissClassifier, NeuMissRegressor
 
 

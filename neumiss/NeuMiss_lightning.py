@@ -398,18 +398,13 @@ class NeuMiss(pl.LightningModule):
         x, y = batch
         y_hat = self(x)
 
-        # Compute metrics
-        loss = self.loss(y_hat, y.double())
-        score = self.score(y_hat, y)
-
         metrics = {}
-        metrics[f'{step_name}_loss'] = loss.item()
-        metrics[f'{step_name}_score'] = score.item()
 
         # Compute metrics specific to classification
         if self.classif:
-            y_probs = Normal(0, 1).cdf(y_hat)  # probit
+            y_probs = torch.sigmoid(y_hat)
 
+            score = self.score(y_probs, y)
             metric_auroc = self.metric_auroc[step_name]
             metric_ece = self.metric_ece[step_name]
             metric_mce = self.metric_mce[step_name]
@@ -419,6 +414,15 @@ class NeuMiss(pl.LightningModule):
             metrics[f'{step_name}_ece'] = metric_ece.forward(y_probs, y)
             metrics[f'{step_name}_mce'] = metric_mce.forward(y_probs, y)
             metrics[f'{step_name}_brier'] = metric_brier.forward(y_probs, y)
+
+        else:
+            score = self.score(y_hat, y)
+
+        # Compute other metrics
+        loss = self.loss(y_hat, y.double())
+
+        metrics[f'{step_name}_loss'] = loss.item()
+        metrics[f'{step_name}_score'] = score.item()
 
         # Filter out None values that can appear with metric.forward
         metrics = {k: v for k, v in metrics.items() if v is not None}
@@ -608,10 +612,10 @@ class BaseNeuMiss(BaseEstimator, NeuMiss):
         n_train = len(dataset) - n_val
         ds_train, ds_val = random_split(dataset, [n_train, n_val])
         train_loader = DataLoader(ds_train, batch_size=self.batch_size,
-                                  shuffle=True, num_workers=8,
+                                  shuffle=True, num_workers=1,
                                   multiprocessing_context='fork')
         val_loader = DataLoader(ds_val, batch_size=self.batch_size,
-                                num_workers=8,
+                                num_workers=1,
                                 multiprocessing_context='fork')
 
         callbacks = []
@@ -652,7 +656,7 @@ class BaseNeuMiss(BaseEstimator, NeuMiss):
 
     def test_from_dataset(self, dataset, ckpt_path='best'):
         test_loader = DataLoader(dataset, batch_size=self.batch_size,
-                                 num_workers=8,
+                                 num_workers=1,
                                  multiprocessing_context='fork')
 
         trainer = pl.Trainer() if self.trainer is None else self.trainer
@@ -663,11 +667,12 @@ class BaseNeuMiss(BaseEstimator, NeuMiss):
         return self.predict_from_dataset(dataset)
 
     def predict_from_dataset(self, dataset, batch_size=10000):
-        loader = DataLoader(dataset, batch_size=batch_size,
-                            num_workers=8,
+        loader = DataLoader(dataset, batch_size=len(dataset),
+                            num_workers=1,
                             multiprocessing_context='fork')
-        y_pred = [self(x) for x, in loader]
-        return torch.cat(y_pred, axis=0)
+        y_pred = [self(x) for x, _ in loader]
+        y_pred = torch.cat(y_pred, axis=0)
+        return torch.sigmoid(y_pred).detach().numpy()
 
     def get_model_params(self):
         return dict(**super().get_model_params(), **{
