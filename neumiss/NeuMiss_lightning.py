@@ -671,7 +671,8 @@ class BaseNeuMiss(BaseEstimator, NeuMiss):
                             num_workers=1,
                             multiprocessing_context='fork')
         y_pred = [self(x) for x, _ in loader]
-        return torch.cat(y_pred, axis=0)
+        y_pred = torch.cat(y_pred, axis=0)
+        return torch.sigmoid(y_pred).detach().numpy()
 
     def get_model_params(self):
         return dict(**super().get_model_params(), **{
