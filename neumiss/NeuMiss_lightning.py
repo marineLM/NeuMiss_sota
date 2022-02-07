@@ -88,7 +88,7 @@ class NeuMiss(pl.LightningModule):
             'val': CalibrationError(norm='max', compute_on_step=False),
             'test': CalibrationError(norm='max', compute_on_step=False),
         }
-        self.metric_brier = {
+        self.metric_rmsce = {
             'train': CalibrationError(norm='l2', compute_on_step=False),
             'val': CalibrationError(norm='l2', compute_on_step=False),
             'test': CalibrationError(norm='l2', compute_on_step=False),
@@ -408,12 +408,12 @@ class NeuMiss(pl.LightningModule):
             metric_auroc = self.metric_auroc[step_name]
             metric_ece = self.metric_ece[step_name]
             metric_mce = self.metric_mce[step_name]
-            metric_brier = self.metric_brier[step_name]
+            metric_rmsce = self.metric_rmsce[step_name]
 
             metrics[f'{step_name}_auroc'] = metric_auroc.forward(y_probs, y)
             metrics[f'{step_name}_ece'] = metric_ece.forward(y_probs, y)
             metrics[f'{step_name}_mce'] = metric_mce.forward(y_probs, y)
-            metrics[f'{step_name}_brier'] = metric_brier.forward(y_probs, y)
+            metrics[f'{step_name}_rmsce'] = metric_rmsce.forward(y_probs, y)
 
         else:
             score = self.score(y_hat, y)
@@ -439,19 +439,19 @@ class NeuMiss(pl.LightningModule):
             metric_auroc = self.metric_auroc[step_name]
             metric_ece = self.metric_ece[step_name]
             metric_mce = self.metric_mce[step_name]
-            metric_brier = self.metric_brier[step_name]
+            metric_rmsce = self.metric_rmsce[step_name]
 
             metrics[f'{step_name}_auroc'] = metric_auroc.compute().item()
             metrics[f'{step_name}_ece'] = metric_ece.compute().item()
             metrics[f'{step_name}_mce'] = metric_mce.compute().item()
-            metrics[f'{step_name}_brier'] = metric_brier.compute().item()
+            metrics[f'{step_name}_rmsce'] = metric_rmsce.compute().item()
 
             self.log_dict(metrics)
 
             metric_auroc.reset()
             metric_ece.reset()
             metric_mce.reset()
-            metric_brier.reset()
+            metric_rmsce.reset()
 
     def training_step(self, train_batch, batch_idx):
         self.log('lr', self.optimizer_object.param_groups[0]['lr'])
