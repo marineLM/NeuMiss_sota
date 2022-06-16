@@ -10,12 +10,22 @@ class Mask(nn.Module):
 
     def __init__(self, input: Tensor):
         super(Mask, self).__init__()
-        # m = torch.isnan(x)
-        # m = torch.isnan(x)
         self.mask = torch.isnan(input)
 
     def forward(self, input: Tensor) -> Tensor:
         return ~self.mask*input
+
+
+class SkipConnection(nn.Module):
+    __constants__ = ['mask']
+    value: Tensor
+
+    def __init__(self, value: Tensor):
+        super(SkipConnection, self).__init__()
+        self.value = value
+
+    def forward(self, input: Tensor) -> Tensor:
+        return input + self.value
 
 
 class NeuMissBlockBase(nn.Module):
@@ -61,7 +71,8 @@ class NeuMissBlock(nn.Module):
         x = torch.nan_to_num(x)
         # h = x - ~m*self.mu
         h = x - mask(self.mu)
-        h_res = x - mask(self.mu)
+        # h_res = x - mask(self.mu)
+        skip = SkipConnection(h)
         # h_res = x - ~m*self.mu
 
         # nn.Linear(n_features, n_features, bias=False)
@@ -72,7 +83,8 @@ class NeuMissBlock(nn.Module):
             # h = self.linear(h)*~m
             h = mask(self.linear(h))
             # h = torch.matmul(h, self.W)*~m
-            h += h_res
+            # h += h_res
+            h = skip(h)
             # h = h.double()
 
         return h
