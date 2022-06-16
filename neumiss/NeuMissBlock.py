@@ -58,34 +58,18 @@ class NeuMissBlock(nn.Module):
     def __init__(self, n_features, depth):
         super().__init__()
         self.depth = depth
-        # self.W = nn.Parameter(torch.empty(n_features, n_features, dtype=torch.float))
-        # self.Wc = nn.Parameter(torch.empty(n_features, n_features, dtype=torch.float))
         self.mu = nn.Parameter(torch.empty(n_features, dtype=torch.float))
-
         self.linear = nn.Linear(n_features, n_features, bias=False)
 
     def forward(self, x):
-        # x = x
-        # m = torch.isnan(x)
         mask = Mask(x)
         x = torch.nan_to_num(x)
-        # h = x - ~m*self.mu
         h = x - mask(self.mu)
-        # h_res = x - mask(self.mu)
         skip = SkipConnection(h)
-        # h_res = x - ~m*self.mu
-
-        # nn.Linear(n_features, n_features, bias=False)
 
         for _ in range(self.depth):
-            # print(h.float())
-            # print(self.linear.weight)
-            # h = self.linear(h)*~m
             h = mask(self.linear(h))
-            # h = torch.matmul(h, self.W)*~m
-            # h += h_res
             h = skip(h)
-            # h = h.double()
 
         return h
 
