@@ -55,13 +55,16 @@ class NeuMissBlockBase(nn.Module):
 
 class NeuMissBlock(nn.Module):
 
-    def __init__(self, n_features, depth):
+    def __init__(self, n_features, depth, dtype=torch.float):
         super().__init__()
         self.depth = depth
-        self.mu = nn.Parameter(torch.empty(n_features, dtype=torch.float))
+        self.dtype = dtype
+        self.mu = nn.Parameter(torch.empty(n_features, dtype=dtype))
         self.linear = nn.Linear(n_features, n_features, bias=False)
+        self.reset_parameters()
 
     def forward(self, x):
+        x = x.type(self.dtype)  # Cast tensor to appropriate dtype
         mask = Mask(x)  # Initialize mask non-linearity
         x = torch.nan_to_num(x)  # Fill missing values with 0
         h = x - mask(self.mu)  # Subtract masked parameter mu
@@ -72,5 +75,9 @@ class NeuMissBlock(nn.Module):
 
         return layers(h)
 
-    # def reset_parameters(self) -> None:
-    #     nn.init.kaiming_uniform_(self.linear.weight, a=math.sqrt(5))
+    def reset_parameters(self) -> None:
+        nn.init.normal_(self.mu)
+        nn.init.xavier_uniform_(self.linear.weight, gain=0.5)
+
+    def extra_repr(self) -> str:
+        return 'depth={}'.format(self.depth)

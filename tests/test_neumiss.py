@@ -1,6 +1,6 @@
 import torch
 from torch import nn
-import math 
+import math
 import pytest
 from neumiss.NeuMissBlock import NeuMissBlock, NeuMissBlockBase
 import numpy as np
@@ -27,25 +27,21 @@ def test_neumissblock(n_features, depth):
     print(x)
     x = torch.Tensor(x)
 
-    # print(W)
-    # print(x)
-
-    # for net in [NeuMissBlock, NeuMissBlockBase]:
     m = NeuMissBlock(n_features, depth)
-    # linear = nn.Linear(n_features, n_features, bias=False)
     with torch.no_grad():
         W = nn.Parameter(torch.tensor(_W, dtype=torch.float))
-        # linear.weight = W
         m.linear.weight = W
         m.mu = nn.Parameter(torch.zeros_like(m.mu))
-    # torch.nn.init.xavier_uniform(m.linear.weight)
-    # m.W = nn.Parameter(torch.zeros_like(m.W))
-    # m.mu = nn.Parameter(torch.zeros_like(m.mu))
-    # m.reset_parameters()
-    # print(x)
-    # y1 = linear(x)
     y1 = m.forward(x)
     print(y1)
+
+    m3 = NeuMissBlock(n_features, depth, dtype=torch.double)
+    with torch.no_grad():
+        W = nn.Parameter(torch.tensor(_W, dtype=torch.double))
+        m3.linear.weight = W
+        m3.mu = nn.Parameter(torch.zeros_like(m.mu))
+    y3 = m3.forward(x)
+    print(y3)
 
 
     m2 = NeuMissBlockBase(n_features, depth)
@@ -61,3 +57,8 @@ def test_neumissblock(n_features, depth):
 
     # a1 = torch.tensor(np.pi, dtype=torch.float)
     # a2 = torch.tensor(np.pi, dtype=torch.double)
+
+
+    assert torch.allclose(y1, y3.float())
+
+    print(m3)
