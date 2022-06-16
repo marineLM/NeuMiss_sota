@@ -8,9 +8,11 @@ class Mask(nn.Module):
     __constants__ = ['mask']
     mask: Tensor
 
-    def __init__(self, mask: bool = False):
+    def __init__(self, input: Tensor):
         super(Mask, self).__init__()
-        self.mask = mask
+        # m = torch.isnan(x)
+        # m = torch.isnan(x)
+        self.mask = torch.isnan(input)
 
     def forward(self, input: Tensor) -> Tensor:
         return ~self.mask*input
@@ -53,18 +55,22 @@ class NeuMissBlock(nn.Module):
         self.linear = nn.Linear(n_features, n_features, bias=False)
 
     def forward(self, x):
-        x = x
-        m = torch.isnan(x)
+        # x = x
+        # m = torch.isnan(x)
+        mask = Mask(x)
         x = torch.nan_to_num(x)
-        h = x - ~m*self.mu
-        h_res = x - ~m*self.mu
+        # h = x - ~m*self.mu
+        h = x - mask(self.mu)
+        h_res = x - mask(self.mu)
+        # h_res = x - ~m*self.mu
 
         # nn.Linear(n_features, n_features, bias=False)
 
         for _ in range(self.depth):
             # print(h.float())
             # print(self.linear.weight)
-            h = self.linear(h)*~m
+            # h = self.linear(h)*~m
+            h = mask(self.linear(h))
             # h = torch.matmul(h, self.W)*~m
             h += h_res
             # h = h.double()
