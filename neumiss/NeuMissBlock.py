@@ -62,21 +62,14 @@ class NeuMissBlock(nn.Module):
         self.linear = nn.Linear(n_features, n_features, bias=False)
 
     def forward(self, x):
-        mask = Mask(x)
-        x = torch.nan_to_num(x)
-        h = x - mask(self.mu)
-        skip = SkipConnection(h)
+        mask = Mask(x)  # Initialize mask non-linearity
+        x = torch.nan_to_num(x)  # Fill missing values with 0
+        h = x - mask(self.mu)  # Subtract masked parameter mu
+        skip = SkipConnection(h)  # Initialize skip connection with this value
 
-        # One Neumann iteration
-        layer = [
-            self.linear,
-            mask,
-            skip,
-        ]
+        layer = [self.linear, mask, skip]  # One Neumann iteration
+        layers = nn.Sequential(*(layer*self.depth))  # Neumann block
 
-        # Neumann block
-        layers = nn.Sequential(*(layer*self.depth))
-        
         return layers(h)
 
     # def reset_parameters(self) -> None:
