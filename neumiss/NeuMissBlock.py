@@ -67,15 +67,17 @@ class NeuMissBlock(nn.Module):
         h = x - mask(self.mu)
         skip = SkipConnection(h)
 
-        for _ in range(self.depth):
-            h = mask(self.linear(h))
-            h = skip(h)
+        # One Neumann iteration
+        layer = [
+            self.linear,
+            mask,
+            skip,
+        ]
 
-        return h
+        # Neumann block
+        layers = nn.Sequential(*(layer*self.depth))
+        
+        return layers(h)
 
     # def reset_parameters(self) -> None:
     #     nn.init.kaiming_uniform_(self.linear.weight, a=math.sqrt(5))
-
-# nn.Linear
-
-nn.ReLU
