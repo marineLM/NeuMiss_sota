@@ -130,3 +130,22 @@ def test_training(n_features, depth, link, dtype, net):
             loss.backward()
             optimizer.step()
             optimizer.zero_grad()
+
+
+@pytest.mark.parametrize('n_features', [1, 2, 10])
+@pytest.mark.parametrize('neumiss_depth', [0, 1, 2])
+@pytest.mark.parametrize('mlp_depth', [0, 1, 2])
+def test_neumiss_mlp(n_features, neumiss_depth, mlp_depth):
+    rng = np.random.RandomState(0)
+    x = rng.normal(size=n_features)
+    mask = rng.binomial(1, 0.5, size=n_features)
+    np.putmask(x, mask, np.nan)
+    x = torch.Tensor(x)
+
+    m = NeuMissMLP(n_features, neumiss_depth, mlp_depth, dtype=torch.float)
+    y1 = m.forward(x)
+
+    if mlp_depth == 0:
+        assert y1.shape == (n_features,)
+    else:
+        assert y1.shape == (1,)
