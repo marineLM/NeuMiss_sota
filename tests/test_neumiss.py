@@ -1,5 +1,3 @@
-import math
-
 import numpy as np
 import pytest
 import torch
@@ -7,84 +5,6 @@ from neumiss.NeuMissBlock import NeuMissBlock, NeuMissMLP
 from torch import nn
 from torch.nn.functional import binary_cross_entropy_with_logits, mse_loss
 from torch.utils.data import DataLoader
-
-
-class NeuMissBlockRef(nn.Module):
-    """Reference NeuMissBlock."""
-
-    def __init__(self, n_features, depth):
-        super().__init__()
-        self.depth = depth
-        self.W = nn.Parameter(torch.empty(n_features, n_features, dtype=torch.float))
-        self.mu = nn.Parameter(torch.empty(n_features, dtype=torch.float))
-
-    def forward(self, x):
-        m = torch.isnan(x)
-        x = torch.nan_to_num(x)
-        h = x - ~m*self.mu
-        h_res = x - ~m*self.mu
-
-        for _ in range(self.depth):
-            h = torch.matmul(h, self.W)*~m
-            h += h_res
-
-        return h
-
-    def reset_parameters(self) -> None:
-        nn.init.kaiming_uniform_(self.W, a=math.sqrt(5))
-
-
-@pytest.mark.parametrize('n_features', [2, 10])
-@pytest.mark.parametrize('depth', [1, 3])
-def test_neumissblock_old_vs_new(n_features, depth):
-    rng = np.random.RandomState(0)
-    _W = rng.uniform(size=(n_features, n_features))
-
-    x = rng.normal(size=n_features)
-    mask = rng.binomial(1, 0.5, size=n_features)
-    np.putmask(x, mask, np.nan)
-    x = torch.Tensor(x)
-
-    m = NeuMissBlock(n_features, depth)
-    W = nn.Parameter(torch.tensor(_W, dtype=torch.float))
-    m.linear.weight = W
-    m.mu = nn.Parameter(torch.zeros_like(m.mu))
-    y1 = m.forward(x)
-
-    m2 = NeuMissBlockRef(n_features, depth)
-    m2.W = nn.Parameter(torch.tensor(_W.T, dtype=torch.float))
-    m2.mu = nn.Parameter(torch.zeros_like(m.mu, dtype=torch.float))
-    y2 = m2.forward(x)
-
-    assert torch.allclose(y1.double(), y2.double())
-    assert torch.allclose(m2.W.T.double(), m.linear.weight.double())
-
-
-@pytest.mark.parametrize('n_features', [2, 10])
-@pytest.mark.parametrize('depth', [1, 3])
-def test_neumissblock_float_vs_double(n_features, depth):
-    rng = np.random.RandomState(0)
-    _W = rng.uniform(size=(n_features, n_features))
-
-    x = rng.normal(size=n_features)
-    mask = rng.binomial(1, 0.5, size=n_features)
-    np.putmask(x, mask, np.nan)
-    x = torch.Tensor(x)
-
-    m = NeuMissBlock(n_features, depth, dtype=torch.float)
-    W = nn.Parameter(torch.tensor(_W, dtype=torch.float))
-    m.linear.weight = W
-    m.mu = nn.Parameter(torch.zeros_like(m.mu))
-    y1 = m.forward(x)
-
-    m = NeuMissBlock(n_features, depth, dtype=torch.double)
-    W = nn.Parameter(torch.tensor(_W, dtype=torch.double))
-    m.linear.weight = W
-    m.mu = nn.Parameter(torch.zeros_like(m.mu))
-    y2 = m.forward(x)
-
-    assert torch.allclose(y1, y2.float())
-    # assert torch.allclose(m2.W.T.double(), m.linear.weight.double())
 
 
 @pytest.mark.parametrize('n_features', [2, 10])
@@ -149,3 +69,81 @@ def test_neumiss_mlp(n_features, neumiss_depth, mlp_depth):
         assert y1.shape == (n_features,)
     else:
         assert y1.shape == (1,)
+
+
+class NeuMissBlockRef(nn.Module):
+    """Reference NeuMissBlock."""
+
+    def __init__(self, n_features, depth):
+        super().__init__()
+        self.depth = depth
+        self.W = nn.Parameter(torch.empty(n_features, n_features, dtype=torch.float))
+        self.mu = nn.Parameter(torch.empty(n_features, dtype=torch.float))
+
+    def forward(self, x):
+        m = torch.isnan(x)
+        x = torch.nan_to_num(x)
+        h = x - ~m*self.mu
+        h_res = x - ~m*self.mu
+
+        for _ in range(self.depth):
+            h = torch.matmul(h, self.W)*~m
+            h += h_res
+
+        return h
+
+    def reset_parameters(self) -> None:
+        nn.init.xavier_uniform_(self.W, gain=0.5)
+
+
+@pytest.mark.parametrize('n_features', [2, 10])
+@pytest.mark.parametrize('depth', [1, 3])
+def test_neumissblock_old_vs_new(n_features, depth):
+    rng = np.random.RandomState(0)
+    _W = rng.uniform(size=(n_features, n_features))
+
+    x = rng.normal(size=n_features)
+    mask = rng.binomial(1, 0.5, size=n_features)
+    np.putmask(x, mask, np.nan)
+    x = torch.Tensor(x)
+
+    m = NeuMissBlock(n_features, depth)
+    W = nn.Parameter(torch.tensor(_W, dtype=torch.float))
+    m.linear.weight = W
+    m.mu = nn.Parameter(torch.zeros_like(m.mu))
+    y1 = m.forward(x)
+
+    m2 = NeuMissBlockRef(n_features, depth)
+    m2.W = nn.Parameter(torch.tensor(_W.T, dtype=torch.float))
+    m2.mu = nn.Parameter(torch.zeros_like(m.mu, dtype=torch.float))
+    y2 = m2.forward(x)
+
+    assert torch.allclose(y1.double(), y2.double())
+    assert torch.allclose(m2.W.T.double(), m.linear.weight.double())
+
+
+@pytest.mark.parametrize('n_features', [2, 10])
+@pytest.mark.parametrize('depth', [1, 3])
+def test_neumissblock_float_vs_double(n_features, depth):
+    rng = np.random.RandomState(0)
+    _W = rng.uniform(size=(n_features, n_features))
+
+    x = rng.normal(size=n_features)
+    mask = rng.binomial(1, 0.5, size=n_features)
+    np.putmask(x, mask, np.nan)
+    x = torch.Tensor(x)
+
+    m = NeuMissBlock(n_features, depth, dtype=torch.float)
+    W = nn.Parameter(torch.tensor(_W, dtype=torch.float))
+    m.linear.weight = W
+    m.mu = nn.Parameter(torch.zeros_like(m.mu))
+    y1 = m.forward(x)
+
+    m = NeuMissBlock(n_features, depth, dtype=torch.double)
+    W = nn.Parameter(torch.tensor(_W, dtype=torch.double))
+    m.linear.weight = W
+    m.mu = nn.Parameter(torch.zeros_like(m.mu))
+    y2 = m.forward(x)
+
+    assert torch.allclose(y1, y2.float())
+    # assert torch.allclose(m2.W.T.double(), m.linear.weight.double())
