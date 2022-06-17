@@ -1,1 +1,1 @@
-from .NeuMiss_lightning import NeuMiss, NeuMissRegressor, NeuMissClassifier
+from .NeuMissBlock import NeuMissBlock, NeuMissMLP

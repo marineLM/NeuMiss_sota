@@ -1,6 +1,6 @@
 import torch
 from torch import Tensor, nn
-from torch.nn import Linear, ReLU
+from torch.nn import Linear, Parameter, ReLU, Sequential
 from torch.types import _dtype
 
 
@@ -49,8 +49,8 @@ class NeuMissBlock(nn.Module):
         super().__init__()
         self.depth = depth
         self.dtype = dtype
-        self.mu = nn.Parameter(torch.empty(n_features, dtype=dtype))
-        self.linear = nn.Linear(n_features, n_features, bias=False, dtype=dtype)
+        self.mu = Parameter(torch.empty(n_features, dtype=dtype))
+        self.linear = Linear(n_features, n_features, bias=False, dtype=dtype)
         self.reset_parameters()
 
     def forward(self, x: Tensor) -> Tensor:
@@ -61,7 +61,7 @@ class NeuMissBlock(nn.Module):
         skip = SkipConnection(h)  # Initialize skip connection with this value
 
         layer = [self.linear, mask, skip]  # One Neumann iteration
-        layers = nn.Sequential(*(layer*self.depth))  # Neumann block
+        layers = Sequential(*(layer*self.depth))  # Neumann block
 
         return layers(h)
 
@@ -98,7 +98,7 @@ class NeuMissMLP(nn.Module):
         self.dtype = dtype
 
         n_hidden = max(mlp_depth - 1, 0)
-        self.layers = nn.Sequential(
+        self.layers = Sequential(
             NeuMissBlock(n_features, neumiss_depth, dtype),
             *[Linear(n_features, n_features, dtype=dtype), ReLU()]*n_hidden,
             *[Linear(n_features, 1, dtype=dtype)]*(mlp_depth > 0),
