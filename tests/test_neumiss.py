@@ -3,7 +3,7 @@ import math
 import numpy as np
 import pytest
 import torch
-from neumiss.NeuMissBlock import NeuMissBlock
+from neumiss.NeuMissBlock import NeuMissBlock, NeuMissMLP
 from torch import nn
 from torch.nn.functional import binary_cross_entropy_with_logits, mse_loss
 from torch.utils.data import DataLoader
@@ -91,7 +91,8 @@ def test_neumissblock_float_vs_double(n_features, depth):
 @pytest.mark.parametrize('depth', [1, 3])
 @pytest.mark.parametrize('link', ['linear', 'probit'])
 @pytest.mark.parametrize('dtype', [torch.float, torch.double])
-def test_training(n_features, depth, link, dtype):
+@pytest.mark.parametrize('net', ['neumiss_block', 'neumiss_mlp'])
+def test_training(n_features, depth, link, dtype, net):
     from datamiss import MCARDataset
     n_epochs = 2
 
@@ -104,8 +105,14 @@ def test_training(n_features, depth, link, dtype):
                      missing_rate=0.5, snr=10, dtype=dtype)
 
     # Network
-    neumiss_block = NeuMissBlock(n_features, depth, dtype=dtype)
-    model = nn.Sequential(neumiss_block, nn.Linear(n_features, 1, bias=False, dtype=dtype))
+    if net == 'neumiss_block':
+        neumiss_block = NeuMissBlock(n_features, depth, dtype=dtype)
+        model = nn.Sequential(neumiss_block,
+                              nn.Linear(n_features, 1, bias=True, dtype=dtype))
+
+    elif net == 'neumiss_mlp':
+        model = NeuMissMLP(n_features, neumiss_depth=depth, mlp_depth=1,
+                           dtype=dtype)
 
     train_loader = DataLoader(ds, batch_size=64)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-5, weight_decay=0.1)

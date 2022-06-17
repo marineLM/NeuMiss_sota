@@ -1,11 +1,11 @@
 import torch
-from torch import nn
-from torch import Tensor
+from torch import Tensor, nn
+from torch.nn import Linear, ReLU
 from torch.types import _dtype
 
 
 class Mask(nn.Module):
-    __constants__ = ['mask']
+    """A mask non-linearity."""
     mask: Tensor
 
     def __init__(self, input: Tensor):
@@ -17,7 +17,7 @@ class Mask(nn.Module):
 
 
 class SkipConnection(nn.Module):
-    __constants__ = ['value']
+    """A skip connection operation."""
     value: Tensor
 
     def __init__(self, value: Tensor):
@@ -29,8 +29,8 @@ class SkipConnection(nn.Module):
 
 
 class NeuMissBlock(nn.Module):
-    """Implement the NeuMiss block from "What’s a good imputation to predict
-    with missing values?" by Marine Le Morvan, Julie Josse, Erwan Scornet,
+    """The NeuMiss block from "What’s a good imputation to predict with
+    missing values?" by Marine Le Morvan, Julie Josse, Erwan Scornet,
     Gael Varoquaux."""
 
     def __init__(self, n_features: int, depth: int,
@@ -71,3 +71,38 @@ class NeuMissBlock(nn.Module):
 
     def extra_repr(self) -> str:
         return 'depth={}'.format(self.depth)
+
+
+class NeuMissMLP(nn.Module):
+    """A NeuMiss block followed by a MLP."""
+
+    def __init__(self, n_features: int, neumiss_depth: int, mlp_depth: int,
+                 dtype: _dtype = torch.float) -> None:
+        """
+        Parameters
+        ----------
+        n_features : int
+            Dimension of inputs.
+        neumiss_depth : int
+            Number of layers in the NeuMiss block.
+        mlp_depth : int
+            Number of layers in the MLP (mlp_depth - 1 hidden layers).
+        dtype : _dtype
+            Pytorch dtype for the parameters. Default: torch.float.
+
+        """
+        super().__init__()
+        self.n_features = n_features
+        self.neumiss_depth = neumiss_depth
+        self.mlp_depth = mlp_depth
+        self.dtype = dtype
+
+        n_hidden = max(mlp_depth - 1, 0)
+        self.layers = nn.Sequential(
+            NeuMissBlock(n_features, neumiss_depth, dtype),
+            *[Linear(n_features, n_features, dtype=dtype), ReLU()]*n_hidden,
+            *[Linear(n_features, 1, dtype=dtype)]*(mlp_depth > 0),
+        )
+
+    def forward(self, x: Tensor) -> Tensor:
+        return self.layers(x)
