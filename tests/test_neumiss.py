@@ -1,9 +1,13 @@
-import torch
-from torch import nn
 import math
-import pytest
-from neumiss.NeuMissBlock import NeuMissBlock
+
 import numpy as np
+import pytest
+import torch
+from neumiss.NeuMissBlock import NeuMissBlock
+from torch import nn
+from torch.nn.functional import binary_cross_entropy_with_logits, mse_loss
+from torch.utils.data import DataLoader
+
 
 @pytest.mark.parametrize('n_features', [2, 10])
 @pytest.mark.parametrize('depth', [1, 3])
@@ -71,7 +75,6 @@ class NeuMissBlockBase(nn.Module):
         super().__init__()
         self.depth = depth
         self.W = nn.Parameter(torch.empty(n_features, n_features, dtype=torch.float))
-        # self.Wc = nn.Parameter(torch.empty(n_features, n_features, dtype=torch.float))
         self.mu = nn.Parameter(torch.empty(n_features, dtype=torch.float))
 
     def forward(self, x):
@@ -141,3 +144,38 @@ def test_neumissblock_float_vs_double(n_features, depth):
 
     assert torch.allclose(y1, y2.float())
     # assert torch.allclose(m2.W.T.double(), m.linear.weight.double())
+
+
+@pytest.mark.parametrize('n_features', [2, 10])
+@pytest.mark.parametrize('depth', [1, 3])
+@pytest.mark.parametrize('link', ['linear', 'probit'])
+def test_training(n_features, depth, link):
+    from datamiss import MCARDataset
+    n_epochs = 3
+
+    # Dataset
+    n_samples = 1000
+    mean = np.zeros(n_features)
+    cov = np.eye(n_features)
+    beta = np.ones(n_features + 1)
+    ds = MCARDataset(n_samples, mean, cov, link=link, beta=beta, missing_rate=0.5, snr=10, dtype=torch.float)
+
+    # Network
+    neumiss_block = NeuMissBlock(n_features, depth, dtype=torch.float)
+    model = nn.Sequential(neumiss_block, nn.Linear(n_features, 1, bias=False))
+
+    train_loader = DataLoader(ds, batch_size=64)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-5, weight_decay=0.1)
+
+    # TRAIN LOOP
+    model.train()
+    _loss = binary_cross_entropy_with_logits if ds.is_classif() else mse_loss
+    for epoch in range(n_epochs):
+        print(f'Epoch: {epoch}')
+        for x, y in train_loader:
+            y_hat = torch.squeeze(model(x))
+            loss = _loss(y_hat, y)
+            print('train loss: ', loss.item())
+            loss.backward()
+            optimizer.step()
+            optimizer.zero_grad()
