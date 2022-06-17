@@ -50,9 +50,8 @@ class NeuMissBlock(nn.Module):
         self.depth = depth
         self.dtype = dtype
         self.mu = nn.Parameter(torch.empty(n_features, dtype=dtype))
-        self.linear = nn.Linear(n_features, n_features, bias=False)
-        # self.linear.weight = nn.Parameter(self.linear.weight.type(dtype))
-        # self.reset_parameters()
+        self.linear = nn.Linear(n_features, n_features, bias=False, dtype=dtype)
+        self.reset_parameters()
 
     def forward(self, x: Tensor) -> Tensor:
         x = x.type(self.dtype)  # Cast tensor to appropriate dtype
@@ -67,19 +66,8 @@ class NeuMissBlock(nn.Module):
         return layers(h)
 
     def reset_parameters(self) -> None:
-        torch.manual_seed(0)
         nn.init.normal_(self.mu)
-        # W = self.linear.weight
-        torch.manual_seed(0)
-        nn.init.normal_(self.linear.weight.float())
-        # nn.init.xavier_uniform_(self.linear.weight, gain=0.5)
-        print('Wb', self.linear.weight)
-        self.linear.weight = nn.Parameter(self.linear.weight.type(self.dtype))
-        print('Wa', self.linear.weight)
-
-        # print('Wdtyped', self.linear.weight.type(self.dtype))
-        # self.mu = nn.Parameter(self.mu.type(self.dtype))
-        # self.linear.weight = nn.Parameter(self.linear.weight.type(self.dtype))
+        nn.init.xavier_uniform_(self.linear.weight, gain=0.5)
 
     def extra_repr(self) -> str:
         return 'depth={}'.format(self.depth)

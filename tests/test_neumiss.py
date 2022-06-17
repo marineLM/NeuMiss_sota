@@ -90,20 +90,22 @@ def test_neumissblock_float_vs_double(n_features, depth):
 @pytest.mark.parametrize('n_features', [2, 10])
 @pytest.mark.parametrize('depth', [1, 3])
 @pytest.mark.parametrize('link', ['linear', 'probit'])
-def test_training(n_features, depth, link):
+@pytest.mark.parametrize('dtype', [torch.float, torch.double])
+def test_training(n_features, depth, link, dtype):
     from datamiss import MCARDataset
-    n_epochs = 3
+    n_epochs = 2
 
     # Dataset
     n_samples = 1000
     mean = np.zeros(n_features)
     cov = np.eye(n_features)
     beta = np.ones(n_features + 1)
-    ds = MCARDataset(n_samples, mean, cov, link=link, beta=beta, missing_rate=0.5, snr=10, dtype=torch.float)
+    ds = MCARDataset(n_samples, mean, cov, link=link, beta=beta,
+                     missing_rate=0.5, snr=10, dtype=dtype)
 
     # Network
-    neumiss_block = NeuMissBlock(n_features, depth, dtype=torch.float)
-    model = nn.Sequential(neumiss_block, nn.Linear(n_features, 1, bias=False))
+    neumiss_block = NeuMissBlock(n_features, depth, dtype=dtype)
+    model = nn.Sequential(neumiss_block, nn.Linear(n_features, 1, bias=False, dtype=dtype))
 
     train_loader = DataLoader(ds, batch_size=64)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-5, weight_decay=0.1)
@@ -114,6 +116,7 @@ def test_training(n_features, depth, link):
     for epoch in range(n_epochs):
         print(f'Epoch: {epoch}')
         for x, y in train_loader:
+            print(x.dtype)
             y_hat = torch.squeeze(model(x))
             loss = _loss(y_hat, y)
             print('train loss: ', loss.item())
