@@ -77,7 +77,7 @@ class NeuMissMLP(nn.Module):
     """A NeuMiss block followed by a MLP."""
 
     def __init__(self, n_features: int, neumiss_depth: int, mlp_depth: int,
-                 dtype: _dtype = torch.float) -> None:
+                 mlp_width: int = None, dtype: _dtype = torch.float) -> None:
         """
         Parameters
         ----------
@@ -87,6 +87,8 @@ class NeuMissMLP(nn.Module):
             Number of layers in the NeuMiss block.
         mlp_depth : int
             Number of hidden layers in the MLP.
+        mlp_width : int
+            Width of the MLP. If None take mlp_width=n_features. Default: None.
         dtype : _dtype
             Pytorch dtype for the parameters. Default: torch.float.
 
@@ -96,11 +98,20 @@ class NeuMissMLP(nn.Module):
         self.neumiss_depth = neumiss_depth
         self.mlp_depth = mlp_depth
         self.dtype = dtype
+        mlp_width = n_features if mlp_width is None else mlp_width
+        self.mlp_width = mlp_width
 
+        if mlp_width != n_features and mlp_depth == 0:
+            raise ValueError(f'mlp_width should be equal to n_features when '
+                             f'mlp_depth=0. Got mlp_width={mlp_width} != '
+                             f'n_features={n_features}.')
+
+        b = int(mlp_depth >= 1)
         self.layers = Sequential(
             NeuMissBlock(n_features, neumiss_depth, dtype),
-            *[Linear(n_features, n_features, dtype=dtype), ReLU()]*mlp_depth,
-            *[Linear(n_features, 1, dtype=dtype)],
+            *[Linear(n_features, mlp_width, dtype=dtype), ReLU()]*b,
+            *[Linear(mlp_width, mlp_width, dtype=dtype), ReLU()]*b*(mlp_depth-1),
+            *[Linear(mlp_width, 1, dtype=dtype)],
         )
 
     def forward(self, x: Tensor) -> Tensor:
