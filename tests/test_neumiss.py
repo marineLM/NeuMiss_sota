@@ -64,11 +64,7 @@ def test_neumiss_mlp(n_features, neumiss_depth, mlp_depth):
 
     m = NeuMissMLP(n_features, neumiss_depth, mlp_depth, dtype=torch.float)
     y1 = m.forward(x)
-
-    if mlp_depth == 0:
-        assert y1.shape == (n_features,)
-    else:
-        assert y1.shape == (1,)
+    assert y1.shape == (1,)
 
 
 class NeuMissBlockRef(nn.Module):

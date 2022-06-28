@@ -86,7 +86,7 @@ class NeuMissMLP(nn.Module):
         neumiss_depth : int
             Number of layers in the NeuMiss block.
         mlp_depth : int
-            Number of layers in the MLP (mlp_depth - 1 hidden layers).
+            Number of hidden layers in the MLP.
         dtype : _dtype
             Pytorch dtype for the parameters. Default: torch.float.
 
@@ -97,11 +97,10 @@ class NeuMissMLP(nn.Module):
         self.mlp_depth = mlp_depth
         self.dtype = dtype
 
-        n_hidden = max(mlp_depth - 1, 0)
         self.layers = Sequential(
             NeuMissBlock(n_features, neumiss_depth, dtype),
-            *[Linear(n_features, n_features, dtype=dtype), ReLU()]*n_hidden,
-            *[Linear(n_features, 1, dtype=dtype)]*(mlp_depth > 0),
+            *[Linear(n_features, n_features, dtype=dtype), ReLU()]*mlp_depth,
+            *[Linear(n_features, 1, dtype=dtype)],
         )
 
     def forward(self, x: Tensor) -> Tensor:
