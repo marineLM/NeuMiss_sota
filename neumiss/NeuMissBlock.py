@@ -101,18 +101,15 @@ class NeuMissMLP(nn.Module):
         mlp_width = n_features if mlp_width is None else mlp_width
         self.mlp_width = mlp_width
 
-        if mlp_width != n_features and mlp_depth == 0:
-            raise ValueError(f'mlp_width should be equal to n_features when '
-                             f'mlp_depth=0. Got mlp_width={mlp_width} != '
-                             f'n_features={n_features}.')
-
         b = int(mlp_depth >= 1)
+        last_layer_width = mlp_width if b else n_features
         self.layers = Sequential(
             NeuMissBlock(n_features, neumiss_depth, dtype),
             *[Linear(n_features, mlp_width, dtype=dtype), ReLU()]*b,
             *[Linear(mlp_width, mlp_width, dtype=dtype), ReLU()]*b*(mlp_depth-1),
-            *[Linear(mlp_width, 1, dtype=dtype)],
+            *[Linear(last_layer_width, 1, dtype=dtype)],
         )
 
     def forward(self, x: Tensor) -> Tensor:
-        return self.layers(x)
+        out = self.layers(x)
+        return out.squeeze()
