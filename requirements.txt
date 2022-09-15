@@ -1,5 +1,2 @@
 numpy
-scikit-learn
 pytorch
-scipy
-pytorch-lightning
