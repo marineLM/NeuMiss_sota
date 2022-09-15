@@ -1,18 +1,19 @@
-# NeuMiss SOTA
+# NeuMiss
 
-NeuMiss is a neural network architecture designed for learning with missing values.
+This repo provides a PyTorch module implementing NeuMiss, a neural network architecture designed for learning with missing values.
+
+The NeuMiss block is implemented in `NeuMissBlock`. It takes as input a vector with missing values and outputs a vector of the same size as the input, without mising values. It is thus necessary to chain it with subsequent layers appropriate to the prediction task. As an example we provide `NeuMissMLP`, where the NeuMiss block is chained with an MLP. The `NeuMissBlock` can be used like any other PyTorch layer, and can easily be chained with other architectures (ResNets, ...).
+
+Below is a diagram of a NeuMiss block chained with an MLP:
 
 ![image](./NeuMiss.png)
 
-This repo provides a PyTorch module implementing NeuMiss, which can easily be used like any other PyTorch layer.
-
-For more details, refer to the papers introducing this architecture:
+For more details, please refer to the papers introducing NeuMiss:
 * [NeuMiss networks: differentiable programming for supervised learning with missing values.](https://proceedings.neurips.cc/paper/2020/file/42ae1544956fbe6e09242e6cd752444c-Paper.pdf)
 
 * [What’s a good imputation to predict with missing values?](https://papers.nips.cc/paper/2021/file/5fe8fdc79ce292c39c5f209d734b7206-Paper.pdf)
 
-The architecture imlemented corresponds to the latest version of NeuMiss (i.e. with shared weights) introduced in the second paper.
-
+The architecture implemented corresponds to the latest version (i.e. with shared weights) introduced in the second paper.
 
 ## Install
 Clone this repository and install it with pip in the environment of your choice (venv, conda...):
@@ -21,8 +22,6 @@ pip install .
 ```
 
 ## Use NeuMiss
-The NeuMiss block is implemented in `NeuMissBlock`. We also provide `NeuMissMLP`, where the NeuMiss block is chained with an MLP. The `NeuMissBlock` can be used like any other PyTorch layer, and can easily be chained with other architectures (ResNets, ...).
-
 Below, we show how to train `NeuMissMLP` on a simple synthetic dataset.
 
 Import the required modules. 
@@ -68,7 +67,7 @@ train_model(model, criterion, train_loader, val_loader, optimizer,
             scheduler, early_stopping=False, n_epochs=500, lr_threshold=1e-6)
 ```
 
-Compute prediciton scores.
+Compute prediction scores.
 ```python
 train_loader = DataLoader(ds_train, batch_size=200, shuffle=False)
 pred = compute_preds(model, train_loader, val_loader, test_loader,
