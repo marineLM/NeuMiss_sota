@@ -24,13 +24,15 @@ pip install .
 ## Use NeuMiss
 Below, we show how to train `NeuMissMLP` on a simple synthetic dataset.
 
-Import the required modules. 
+Go to src folder and import the required modules. 
 ```python
+cd src
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from neumiss import NeuMissMLP
-from utils import get_example_dataset, get_optimizer_by_group, train_model, \
+from generate_example_dataset import get_example_dataset
+from utils import get_optimizer_by_group, train_model, \
     compute_preds, compute_regression_metrics
 ```
 
