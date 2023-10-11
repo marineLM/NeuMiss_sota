@@ -3,7 +3,7 @@ requires = [
     "setuptools>=42",
     "wheel",
     "numpy",
-    "sklearn",
+    "scikit-learn",
     "torch",
     "scipy",
     "pytorch-lightning",
